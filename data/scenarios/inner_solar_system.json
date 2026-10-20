@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "id": "orbital.scenario.inner_solar_system",
+  "name": "Inner Terrestrial Solar System",
+  "initialPause": false,
+  "timeStepSeconds": 10.0,
+  "timeScale": 86400.0,
+  "integrator": "velocity-verlet",
+  "bodies": [
+    {
+      "id": "body.sun",
+      "name": "Sun",
+      "type": "Star",
+      "physics": {
+        "massKg": 1.98847e30,
+        "meanRadiusM": 6.957e8,
+        "rotationPeriodSeconds": 2160000.0,
+        "axialTiltDegrees": 7.25,
+        "mode": "pinned-source"
+      },
+      "initialState": {
+        "positionM": [0.0, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 0.0]
+      },
+      "appearance": {
+        "colorRGB": [1.0, 0.94, 0.65],
+        "roughness": 0.5,
+        "metallic": 0.0,
+        "emission": 1.0,
+        "atmosphereEnabled": false,
+        "atmosphereDensity": 0.0,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    },
+    {
+      "id": "body.mercury",
+      "name": "Mercury",
+      "type": "Planet",
+      "physics": {
+        "massKg": 3.3011e23,
+        "meanRadiusM": 2.4397e6,
+        "rotationPeriodSeconds": 5067000.0,
+        "axialTiltDegrees": 0.03,
+        "mode": "dynamic"
+      },
+      "initialState": {
+        "positionM": [5.7909e10, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 47360.0]
+      },
+      "appearance": {
+        "colorRGB": [0.7, 0.65, 0.6],
+        "roughness": 0.8,
+        "metallic": 0.0,
+        "emission": 0.0,
+        "atmosphereEnabled": false,
+        "atmosphereDensity": 0.0,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    },
+    {
+      "id": "body.venus",
+      "name": "Venus",
+      "type": "Planet",
+      "physics": {
+        "massKg": 4.8675e24,
+        "meanRadiusM": 6.0518e6,
+        "rotationPeriodSeconds": 20996800.0,
+        "axialTiltDegrees": 177.36,
+        "mode": "dynamic"
+      },
+      "initialState": {
+        "positionM": [1.08209e11, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 35020.0]
+      },
+      "appearance": {
+        "colorRGB": [0.85, 0.75, 0.5],
+        "roughness": 0.6,
+        "metallic": 0.0,
+        "emission": 0.0,
+        "atmosphereEnabled": true,
+        "atmosphereDensity": 2.5,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    },
+    {
+      "id": "body.earth",
+      "name": "Earth",
+      "type": "Planet",
+      "physics": {
+        "massKg": 5.9722e24,
+        "meanRadiusM": 6.371e6,
+        "rotationPeriodSeconds": 86164.0,
+        "axialTiltDegrees": 23.44,
+        "mode": "dynamic"
+      },
+      "initialState": {
+        "positionM": [1.49598e11, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 29780.0]
+      },
+      "appearance": {
+        "colorRGB": [0.15, 0.45, 0.9],
+        "roughness": 0.5,
+        "metallic": 0.0,
+        "emission": 0.0,
+        "atmosphereEnabled": true,
+        "atmosphereDensity": 1.0,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    },
+    {
+      "id": "body.mars",
+      "name": "Mars",
+      "type": "Planet",
+      "physics": {
+        "massKg": 6.4171e23,
+        "meanRadiusM": 3.3895e6,
+        "rotationPeriodSeconds": 88642.0,
+        "axialTiltDegrees": 25.19,
+        "mode": "dynamic"
+      },
+      "initialState": {
+        "positionM": [2.27939e11, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 24070.0]
+      },
+      "appearance": {
+        "colorRGB": [0.88, 0.38, 0.22],
+        "roughness": 0.7,
+        "metallic": 0.0,
+        "emission": 0.0,
+        "atmosphereEnabled": true,
+        "atmosphereDensity": 0.3,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    }
+  ]
+}

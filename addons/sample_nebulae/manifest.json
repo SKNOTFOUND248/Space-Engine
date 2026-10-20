@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "org.orbital.addons.deep-sky-extended",
+  "displayName": "Deep Sky Extended Pack",
+  "version": "1.0.0",
+  "minimumEngineVersion": "0.1.0",
+  "description": "Curated deep-space objects and nebulae models for ORBITAL engine.",
+  "license": "CC-BY-4.0",
+  "dependencies": [],
+  "contentRoots": ["catalogs", "scenarios", "textures"]
+}

@@ -1,0 +1,2815 @@
+ORBITAL SPACE SIMULATION ENGINE
+SPACEENGINE MANUAL RESEARCH + INDEPENDENT IMPLEMENTATION BLUEPRINT
+
+Prepared: 2026-10-20
+Target project: Existing Windows C++ / Visual Studio / GLFW / GLAD / OpenGL project
+Primary goal: Turn lessons from SpaceEngine's public documentation into an original, testable, expandable space simulation engine called ORBITAL.
+
+IMPORTANT SCOPE AND RESEARCH NOTE
+---------------------------------
+This document is a structured summary and engineering analysis of SpaceEngine's public manual pages, not a verbatim reproduction of them. It describes the product behaviors documented there, extracts transferable design patterns, and maps them onto an independent ORBITAL implementation. SpaceEngine is proprietary software. Do not copy its source code, proprietary assets, music, scripts, screenshots, or text into ORBITAL unless a separate license expressly permits the specific use. Recreate general capabilities using original code, original UI, original shaders, and assets with appropriate licenses.
+
+The public pages below were reviewed on 2026-10-20. Web documentation can change. Before depending on version-specific controls or file-format details, re-check the live source page. Some manual sections describe older SpaceEngine versions and explicitly call out version limitations. Treat them as design references, not as guarantees about the current product's internals.
+
+TABLE OF CONTENTS
+-----------------
+01. Executive summary
+02. Research coverage and source index
+03. What SpaceEngine is and is not
+04. FAQ findings
+05. User manual and rendering-settings findings
+06. Add-on system and virtual file system
+07. Object catalog and data-model lessons
+08. Creating stars and multi-star systems
+09. Creating planets and planetary systems
+10. Planet textures and cube-map tiling
+11. Biomes, terrain samples, and soil materials
+12. Deep-space objects: galaxies, clusters, nebulae
+13. Spaceships and modular models
+14. Scenario scripting and guided experiences
+15. Flight School: piloting and commands
+16. License, credits, and asset hygiene
+17. ORBITAL product scope and feature taxonomy
+18. ORBITAL architecture and code layout
+19. Physics and numerical simulation
+20. Relativity and black-hole model boundaries
+21. Rendering architecture and shader plan
+22. Procedural planet generation
+23. Universe scale, camera, and visual-coordinate design
+24. Discovery, search, selection, and object inspector
+25. Add-on architecture for ORBITAL
+26. Scenario scripting design for ORBITAL
+27. UI/UX information architecture
+28. Telemetry and scientific visualization
+29. Data provenance, catalogs, and uncertainty
+30. Performance plan for typical desktop hardware
+31. Security and robustness
+32. Testing strategy
+33. Milestone roadmap
+34. Definition of done
+35. Implementation tickets and acceptance criteria
+36. Example ORBITAL data schemas
+37. Example scenario scripting syntax
+38. Physics formulas and validation cases
+39. Risks, anti-patterns, and mitigation
+40. Suggested implementation order
+41. Final integration checklist
+42. Source bibliography and pages reviewed
+
+===============================================================================
+01. EXECUTIVE SUMMARY
+===============================================================================
+
+SpaceEngine's public manual presents a broad space exploration experience with an astronomical object universe, free movement, object search and navigation, graphics-quality controls, procedural bodies, user-created object catalogs, add-on overlays, ship models, and executable scenario scripts. The manual also shows a data-driven content pipeline: object definitions and assets live in predictable folders; modded content can override base content; text-based scripts describe many object parameters; and large homogeneous catalogs can be represented as CSV while complex objects use richer script-like descriptions.
+
+The most reusable product ideas for ORBITAL are not particular art assets or proprietary implementation details. They are:
+
+- Make the universe data-driven rather than hard-coding every body in C++.
+- Separate physics properties from visual style.
+- Provide a clear object browser and selection-to-inspector workflow.
+- Use procedural rendering where detailed authored textures are unavailable.
+- Make add-ons extend the application without modifying built-in files.
+- Provide scripts for repeatable scenarios, guided demonstrations, camera tours, and teaching.
+- Expose performance/quality settings because atmosphere, terrain, reflections, volumetric effects, and lensing have different costs.
+- Show the user which visual properties and physical calculations are approximate.
+- Keep a diagnostic log and actionable error messages for broken scripts, catalogs, shaders, and assets.
+
+ORBITAL must not attempt to duplicate SpaceEngine's entire universe in its first release. The initial realistic scope is a simulation sandbox with a scientifically testable Newtonian N-body core, planetary-system construction, orbit visualization, collisions, and a polished OpenGL viewport. Build catalog, asset, and scenario infrastructure around that core, then add stars, planet generation, deep-space objects, ships, and scoped relativistic demonstrations in later stages.
+
+A viable product architecture has at least five separable layers:
+
+1. Simulation layer: body state, gravity, integrators, collisions, analysis, history.
+2. Universe/content layer: object definitions, catalog indexing, asset references, scenario loading.
+3. Graphics layer: camera-relative rendering, planetary materials, atmosphere, starfields, black-hole effects.
+4. Interaction layer: object search, explorer, inspector, editors, navigation, time controls.
+5. Extension layer: script runner, add-ons, custom assets, schema/version migration, diagnostics.
+
+Do not conflate the visual universe with the simulated universe. A galaxy can be a renderable catalog object without simulating every star in it. A procedural planet can have a visually generated landscape without claiming that the terrain follows geological time evolution. A black-hole lensing shader can be an educational ray-bending approximation without solving the full Einstein field equations.
+
+===============================================================================
+02. RESEARCH COVERAGE AND SOURCE INDEX
+===============================================================================
+
+The official SpaceEngine site navigation exposes these relevant documentation sections:
+
+A. FAQ
+https://spaceengine.org/manual/faq/
+
+B. User manual
+https://spaceengine.org/manual/user-manual/
+
+C. Making Addons: Introduction
+https://spaceengine.org/manual/making-addons/introduction/
+
+D. Creating a star
+https://spaceengine.org/manual/making-addons/creating-a-star/
+
+E. Creating a planet
+https://spaceengine.org/manual/making-addons/creating-a-planet/
+
+F. Planet textures
+https://spaceengine.org/manual/making-addons/planet-textures/
+
+G. Planet biome presets and soil materials
+https://spaceengine.org/manual/making-addons/planet-biome-presets/
+
+H. Creating a deep-space object (DSO)
+https://spaceengine.org/manual/making-addons/creating-a-dso/
+
+I. Creating a ship
+https://spaceengine.org/manual/making-addons/creating-a-ship/
+
+J. Scenario scripts
+https://spaceengine.org/manual/making-addons/scenario-scripts/
+
+K. Space Flight School
+https://spaceengine.org/manual/space-flight-school/
+
+L. License & Credits
+https://spaceengine.org/manual/license/
+
+M. Site HTML sitemap
+https://spaceengine.org/sitemap.html
+
+Research notes:
+- The FAQ page was reviewed for object coverage, real versus procedural content, user navigation, controls, rendering brightness/exposure, troubleshooting, and project status.
+- The User Manual page was reviewed for graphics quality presets and rendering controls such as VSync, antialiasing, terrain LOD, texture loading, emissive surfaces, planet shine, eclipse shadows, dithering, rings, black-hole quality, volumetric objects, and VR-related variables exposed by scenario scripting documentation.
+- The Addons Introduction was reviewed for content-folder organization, override behavior, package archives, virtual paths, file-priority concepts, and catalog file formats.
+- The star, planet, planet-texture, biome/material, DSO, ship, and scenario-script pages were reviewed as feature references.
+- The Flight School page was reviewed as a user-authored flight/piloting guide; the page itself warns that it may contain errors and may lag behind product versions.
+- The License & Credits page was reviewed for asset-use restrictions and the distinction between ordinary non-commercial use and the separate commercial-use terms offered for SpaceEngine PRO.
+
+Not claimed:
+- This document does not contain every word, image caption, field definition, or example from every webpage.
+- It does not claim to have downloaded or archived SpaceEngine's closed-source code or proprietary assets.
+- It does not claim an exhaustive crawl of every forum post, add-on, linked image, or external resource.
+- It does not claim the current internals of SpaceEngine match every legacy format described in the manuals.
+
+How to extend this research later:
+- Re-open each primary source before implementing version-sensitive compatibility decisions.
+- If ORBITAL ever imports third-party catalogs, record the original data provider, dataset version, license, date retrieved, coordinate system, uncertainties, and processing steps.
+- Keep SpaceEngine compatibility out of the critical path unless the project deliberately commits to reading a documented interoperable format. Prefer an ORBITAL-native format.
+
+===============================================================================
+03. WHAT SPACEENGINE IS AND IS NOT
+===============================================================================
+
+The FAQ describes SpaceEngine as an astronomical exploration program containing a mix of real/catalogued objects and procedurally generated objects. It describes catalog coverage including the Hipparcos stars, known extrasolar planets, thousands of galaxies, and prominent Solar System objects. The FAQ's object counts are version-specific and should not be repeated as a current definitive count without re-verification.
+
+The product is not an open-source SDK. Its FAQ says it is proprietary closed-source software and notes that it is written in C++ with GLSL shaders. This supports using C++ and GLSL as technically appropriate choices for our own independent engine; it does not grant permission to reuse their code.
+
+SpaceEngine's public manual suggests several modes of operation:
+- Explore the universe using camera navigation.
+- Search for an object and travel to it.
+- Select an object, inspect it, or land/approach a planet.
+- Change rendering and visibility settings.
+- Add or modify objects through catalog scripts.
+- Customize planetary textures and procedural material presets.
+- Add galaxies, star clusters, nebulae, and ship models.
+- Execute scripts for camera movement, tutorials, UI/effect changes, and triggered progression.
+
+Design lesson for ORBITAL:
+Make the experience simultaneously an explorer, a simulation lab, and a content authoring tool. Do not make it solely an animated solar system. However, only objects explicitly marked as dynamically simulated should consume N-body physics. Distant galaxies and catalog stars can be visual/celestial records, while a selected local neighborhood can have real physical simulation enabled.
+
+Recommended ORBITAL object capability flags:
+- Renderable: has a visual representation.
+- Catalogued: discoverable by name, classification, or coordinates.
+- Physical source: contributes mass to a gravity solve.
+- Test particle: responds to gravity but does not source gravity.
+- Integrated: state changes through the active physics integrator.
+- Ephemeris-driven: position comes from an external or precomputed trajectory.
+- Procedural: some data or presentation is generated from seed and parameters.
+- Selectable: user can click/search/inspect it.
+- Extensible: external definition or add-on can override permitted fields.
+
+Never assume every object must be integrated in time. This one distinction makes a much more scalable architecture.
+
+===============================================================================
+04. FAQ FINDINGS
+===============================================================================
+
+Source: https://spaceengine.org/manual/faq/
+
+4.1 Real and procedural objects
+The FAQ explains that SpaceEngine combines known astronomical data with procedural generation. It also mentions known limitations or data gaps in star parameters and binary-star catalogs. It gives examples where catalog errors or missing information can lead to objects that appear physically odd.
+
+ORBITAL implementation:
+- Attach provenance to all imported scientific data.
+- Give every numeric measurement a source and optional uncertainty.
+- Do not treat missing values as true zero values.
+- Show “unknown”, “estimated”, or “procedural” when values are not measured.
+- Build binary/multiple star systems explicitly as linked components or barycentric systems instead of quietly treating them as solitary stars.
+- Provide validation warnings for implausible parameter combinations without silently modifying the user's input.
+
+4.2 Object search and navigation
+The FAQ describes name-based object search and camera travel to a selected object. It also describes movement, changes to movement velocity, selecting a body, and traveling/landing at an object.
+
+ORBITAL implementation:
+- Search index by canonical name, alternate names, parent system, category, catalog identifiers, and user tags.
+- Provide a search box that accepts partial names and keyboard navigation.
+- Clicking a result selects it; a separate action focuses the camera on it.
+- Provide “focus”, “follow”, “approach”, and “surface view” as distinct operations.
+- Make camera movement duration configurable.
+- Make fast travel optional; instant teleport should be an explicit action, not a side effect.
+- Use parent-qualified display names to disambiguate repeated names, e.g. a moon named Io under Jupiter versus another catalog object with a similar name.
+
+4.3 Camera input model
+The FAQ distinguishes looking around from changing the camera aim/orientation and mentions keyboard/mouse navigation. This implies that camera commands should be intentionally distinct rather than assigning every mouse gesture to the same movement.
+
+ORBITAL implementation:
+- Left drag: orbit/rotate camera around a focus target.
+- Middle drag: look around without changing focus target, or pan depending on selected navigation mode; communicate this clearly in UI.
+- Right drag: pan or inspect ship model depending on context.
+- Wheel: dolly/zoom or adjust flight speed depending on active mode, never ambiguously both.
+- WASD: free-fly movement.
+- Dedicated keys: ascend/descend, reset camera, focus selection, toggle orbit labels.
+- Add an in-app control map and rebindable input system.
+
+4.4 Visibility and exposure
+The FAQ mentions automatic exposure, a brightness menu, real planet brightness, real sun brightness, limiting faint objects, and a frame-rate counter.
+
+ORBITAL implementation:
+- Use exposure/tone mapping so a bright star and a dim moon remain visually legible.
+- Include automatic exposure as an optional display mode, but provide a scientific fixed-exposure mode for comparisons.
+- Provide separate controls for physical illumination and artistic display brightness.
+- Do not conflate light emission, material albedo, exposure, and UI highlight.
+- Show actual irradiance or a documented proxy for selected bodies when that is the goal.
+- Add FPS, frame-time, physics-time, body count, and warnings to diagnostics.
+
+4.5 Flat/blurry planets
+The FAQ explains that catalog planets may use real photographs/textures with limited resolution and that procedural planets may show more fine detail. It mentions separate high-resolution texture add-ons.
+
+ORBITAL implementation:
+- Support both texture-backed bodies and procedural bodies.
+- Keep base map resolution, detail texture resolution, geometric terrain LOD, and normal-map detail as separate assets/settings.
+- Use mipmaps and anisotropic filtering where supported.
+- Add progressive texture/terrain loading to reduce stutter.
+- Clearly distinguish “source image resolution” from “procedural detail level”.
+
+4.6 Troubleshooting and logs
+The FAQ recommends using the product troubleshooting forum and providing its log file. The useful transferable lesson is that a complex 3D application needs diagnostics beyond a crash dialog.
+
+ORBITAL implementation:
+- Write logs to a known writable user-data folder.
+- Include timestamp, severity, subsystem, source file/line for development builds, and useful context.
+- Log shader compiler output, missing textures, schema parse failures, catalog conflicts, and unsupported GPU capabilities.
+- Provide a copyable diagnostics report that excludes secrets and irrelevant personal paths where possible.
+- Avoid silently skipping failures. Continue safely where possible, but report that the fallback asset or rendering path is active.
+
+4.7 Product lesson from FAQ limitations
+The FAQ openly describes gaps in catalogs and limitations in modeling phenomena such as interstellar extinction. ORBITAL should use the same principle of transparent limitations: a clean scientific tool is more trustworthy when it explains which effect is missing than when it fills the gap with unjustified numbers.
+
+===============================================================================
+05. USER MANUAL AND RENDERING-SETTINGS FINDINGS
+===============================================================================
+
+Source: https://spaceengine.org/manual/user-manual/
+
+The public User Manual page reviewed here primarily exposes graphics-setting descriptions. Its most useful lesson is that a renderer should be tunable rather than having one expensive “everything enabled” mode.
+
+5.1 Quality presets
+SpaceEngine documents low, medium, high, ultra, and custom-style profiles. The VRAM thresholds on the page relate to that product/version and must not be copied as universal hardware rules.
+
+ORBITAL requirement:
+Create Low, Balanced, High, and Custom presets. Detect capabilities at runtime, allow a manual override, and change multiple renderer settings from a single preset.
+
+Low:
+- Lower render scale or simpler antialiasing.
+- Disable expensive volumetric features.
+- Use fewer star/particle sprites.
+- Limit atmosphere sampling and cloud layers.
+- Reduce active terrain tile budget.
+- Use simpler black-hole lensing.
+- Use fewer shadow updates.
+
+Balanced:
+- Default desktop setting.
+- Procedural materials and atmospheric rim effects enabled.
+- Modest bloom.
+- Standard orbit rendering and planet detail.
+- Optional lensing at reduced or moderate quality.
+
+High:
+- Higher terrain LOD.
+- Improved atmosphere and ring rendering.
+- Better shadows and temporal effects.
+- More accurate lensing passes when supported.
+
+Custom:
+- Individually editable effect settings.
+- Display GPU feature availability and estimated cost where possible.
+
+5.2 VSync and frame pacing
+The manual explains that VSync synchronizes rendering with the display to reduce tearing and limit unnecessary frames. ORBITAL should support:
+- VSync off/on/adaptive where GLFW/OpenGL platform support is available.
+- Optional frame-rate cap.
+- Frame-time display, not FPS only.
+- Frame pacing independent of the physics clock.
+
+5.3 Antialiasing
+The manual describes MSAA and FXAA and points out the performance cost/visual trade-off.
+
+ORBITAL design:
+- Start with MSAA if the chosen framebuffer/context supports it.
+- Consider FXAA or another lightweight post-process as an optional fallback.
+- Avoid forcing excessive sample counts on limited hardware.
+- Test black-hole screen-space effects and thin orbit lines because they may alias differently from opaque sphere edges.
+
+5.4 Terrain level of detail and loading throughput
+The manual describes a landscape LOD value and a per-frame texture/tile generation budget, noting that high LOD and limited texture-array capacity can create constraints.
+
+ORBITAL design:
+- Build terrain in tiles with explicit LOD levels.
+- Use quadtree or cube-sphere patches for planet terrain.
+- Set a strict time/budget cap for CPU generation per frame.
+- Upload completed tiles asynchronously only when a GL context/thread model permits it.
+- Limit in-flight GPU uploads and keep a fallback coarse mesh visible.
+- Avoid one giant mesh for an entire planet.
+- Separate terrain quality from global body radius.
+- Expose active terrain memory and tile counts in diagnostics.
+
+5.5 Self-emission
+The manual supports emissive textures for planets and spacecraft.
+
+ORBITAL design:
+- Use emission independently of diffuse lighting.
+- Night-city lights, hot lava regions, ship engines, and star surfaces can emit light.
+- Emissive brightness still passes through exposure and tone mapping.
+- Use separate toggles for surface emission and bloom.
+
+5.6 Planet shine and reflected light
+The manual describes lighting on objects from light reflected by planets/moons and quality levels based on object color. For ORBITAL, implement this in stages:
+- Stage 1: direct star illumination only.
+- Stage 2: ambient fill and a stylized planet-shine approximation.
+- Stage 3: selected-body reflected illumination using a coarse average-color/light estimate.
+- Clearly label approximation; multiple-bounce global illumination is not required for the first release.
+
+5.7 Eclipse shadows
+The manual includes shadows cast by planets/moons.
+
+ORBITAL design:
+- Start with analytical eclipse/eclipse-mask geometry for star-planet-moon alignments.
+- Add shadow mapping only where useful for local surface shadows.
+- Treat a planet's shadow on a moon separately from a shadow on the planet's surface.
+- Avoid expensive cascaded shadows across astronomical distances.
+
+5.8 Dithering
+The manual describes dithering to reduce banding in gradients and space imagery.
+
+ORBITAL design:
+- Add low-amplitude blue-noise or temporally varying noise in a post-process when banding is visible.
+- Disable or seed it deterministically for image comparison tests.
+- Ensure it does not compromise scientific visualization plots or numeric overlays.
+
+5.9 Ring and volumetric-object settings
+The manual documents ring quality/target resolution and volumetric object resolution. The broader lesson is to render expensive features at controlled internal resolutions and upscale deliberately.
+
+ORBITAL design:
+- Ring quality: Off / Flat / Volumetric-like.
+- Ring internal resolution can be lower than viewport size.
+- Nebula/galaxy rendering may render to an offscreen texture when the camera is stationary and refresh while moving.
+- Use temporal history only if motion vectors/reprojection and invalidation are handled; otherwise accept a simpler lower-quality render.
+- Expose the effective rendering mode so users understand the trade-off.
+
+5.10 Black-hole and gravitational lensing quality
+The manual explicitly provides adjustable black-hole quality, including disabling lensing/accretion-disk/jet visuals and options that trade environment-map refresh frequency for performance.
+
+ORBITAL design:
+- Keep physics and lensing renderer independent.
+- Low quality: analytic screen-space distortion for nearby background pixels.
+- Medium: environment map or screen-space ray-bending approximation with capped samples.
+- High: more samples and higher render resolution where supported.
+- Provide a disabled path for GPU limitations.
+- Do not let visual-quality setting alter physical mass, Schwarzschild radius, or numerical trajectory results.
+
+5.11 Anisotropic filtering and texture compression
+The manual describes anisotropic filtering for angled texture views and texture compression as a VRAM trade-off.
+
+ORBITAL design:
+- Enable anisotropic filtering if supported and expose a quality setting.
+- Use GPU-supported compressed texture formats when the loader and graphics hardware support them.
+- Preserve source assets or cache conversion results rather than recompressing every startup.
+- Record texture dimensions/format in diagnostics.
+
+5.12 Key graphics principle
+The graphics pipeline needs independent controls for render resolution, texture detail, terrain LOD, effect quality, post-processing, and CPU/GPU generation workload. A single Low/High switch is not sufficient for an engine with terrain, atmosphere, rings, starfields, ship effects, and black holes.
+
+===============================================================================
+06. ADD-ON SYSTEM AND VIRTUAL FILE SYSTEM
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/introduction/
+
+The Addons Introduction describes a base data folder and an addons folder. The addon tree mirrors the standard data tree and can contain custom content. The manual notes that add-on paths are given higher priority for matching content, and discusses content stored unpacked or in ZIP-based PAK containers. The documented priority behavior includes file/package modification-date rules for some conflicts. This is product-specific and should not be copied exactly without deliberately adopting it.
+
+6.1 What the pattern achieves
+- Base files remain intact.
+- User content can be organized independently.
+- A mod can replace selected content without copying an entire data tree.
+- Packaged add-ons are easier to distribute.
+- Content can be addressed through a normalized virtual path.
+- The application can load data from multiple physical locations while presenting one logical namespace.
+
+6.2 ORBITAL's proposed data layout
+
+ORBITAL/
+  ORBITAL.sln
+  ORBITAL/
+    ORBITAL.vcxproj
+    src/
+    shaders/
+    assets/
+      core/
+      textures/
+      models/
+      fonts/
+      audio/
+    catalogs/
+      stars/
+      planets/
+      satellites/
+      small_bodies/
+      galaxies/
+      clusters/
+      nebulae/
+    scenarios/
+    addons/
+      ExampleAddon/
+        addon.json
+        catalogs/
+        assets/
+        shaders/
+        scenarios/
+        locale/
+    cache/
+    logs/
+    user_data/
+  docs/
+  tests/
+  third_party/
+
+Do not force this exact path layout if the existing Visual Studio project has an established structure. Treat these as logical locations; adapt to existing paths while preserving asset lookup consistency.
+
+6.3 Virtual path API
+Implement one central AssetLocator interface. Modules should request "textures/planets/earth_albedo.png", not concatenate physical paths themselves.
+
+Example operations:
+- OpenRead(virtualPath)
+- Exists(virtualPath)
+- Enumerate(virtualDirectory, extensionFilter)
+- GetEffectiveSource(virtualPath) for diagnostics
+- LoadText(virtualPath)
+- LoadBinary(virtualPath)
+
+The asset locator searches registered roots in an explicitly defined order. For ORBITAL, avoid nondeterministic modification-time resolution by default. Prefer an explicit manifest priority or add-on load order. Conflicts should be reported visibly. For compatibility testing, an optional “last modified wins” policy could be provided, but it must never happen silently.
+
+6.4 Add-on priority policy
+Recommended ORBITAL order:
+1. Runtime/editor override layer (temporary session values, not persisted automatically).
+2. Enabled add-ons, in a deterministic user-configured order.
+3. User library content.
+4. Built-in content.
+
+An add-on should be able to extend catalog data without replacing everything else. A replacement record must explicitly state which object ID/fields it is overriding. The resolver should explain the source file and conflict decision.
+
+6.5 Package format
+SpaceEngine documents PAK files as ZIP archives with a prescribed internal virtual-folder structure. ORBITAL can independently choose .orbaddon ZIP packages with a manifest. Do not assume binary compatibility with SpaceEngine PAKs or scripts.
+
+Recommended manifest fields:
+- id: stable reverse-domain-style identifier.
+- displayName.
+- author.
+- version.
+- minimumEngineVersion.
+- description.
+- license.
+- dependencies.
+- loadPriority.
+- content entries and hashes.
+- overridden object IDs.
+- permissions/capabilities needed by any scripts.
+
+6.6 Integrity and security
+- Never execute arbitrary native code from an add-on.
+- Script files must run in a constrained interpreter.
+- Check path traversal and reject paths escaping the package root.
+- Verify package file sizes and prevent archive bombs.
+- Limit asset dimensions and decoded memory.
+- Validate scripts and catalogs before activating an add-on.
+- Support disable, rollback, and safe mode.
+- Load add-ons into a staged state then commit only after validation.
+- Use hash/checksum manifests for corruption detection.
+
+6.7 Add-on author experience
+Provide a template package, a catalog validator, an asset preview, useful errors, a packaging command, and a “reload add-on” action where safe. The user should not need to edit built-in installation files.
+
+===============================================================================
+07. OBJECT CATALOG AND DATA-MODEL LESSONS
+===============================================================================
+
+The Introduction and individual catalog pages explain that SpaceEngine uses text-like object scripts and, for certain large catalogs, CSV files. The CSV format is compact and efficient for many similar records but supports a narrower set of fields. The richer script format describes more object-specific information.
+
+ORBITAL should implement a similar distinction:
+
+A. Catalog format for homogeneous data
+Use CSV, JSON Lines, SQLite or a binary table for large star/galaxy datasets. Select the exact storage format based on parser, memory, and indexing needs. Use a catalog importer to normalize data into internal records.
+
+B. Rich object format for individual editable bodies
+Use a versioned JSON/YAML/TOML or native schema to describe systems, planets, atmospheres, rings, materials, and references. Human readability matters because users will author content.
+
+C. Runtime state is separate from persistent definitions
+A planet definition includes default mass, radius, rotation, appearance, and initial orbit. Runtime state has current position/velocity, dynamic mass changes, current collisions, and editor modifications. Save snapshots when those are intended to be persisted; do not unintentionally overwrite the base asset definition.
+
+7.1 Identity
+Each object should have:
+- Stable unique ID, not just a display name.
+- Canonical display name.
+- Alternate names and catalog identifiers.
+- Parent system or host ID.
+- Object class and subtype.
+- Data-source/provenance metadata.
+- Definition version.
+- Optional external references.
+
+7.2 Parent relationships
+Bodies can orbit stars, planets can have moons, and star components can orbit a barycenter. Use IDs for hierarchy. Do not infer object parentage from name strings.
+
+7.3 Object classes
+- Star
+- Stellar barycenter / multi-star system
+- Planet
+- Dwarf planet
+- Moon/satellite
+- Asteroid/small body
+- Comet
+- Ring system
+- Black hole
+- Neutron star / white dwarf as render/catalog types when supported
+- Galaxy
+- Star cluster
+- Nebula
+- Spacecraft/probe
+- Waypoint/annotation
+- Procedural placeholder or generated object
+
+A class is not necessarily a physics solver. For example, rendering a galaxy as a distant object does not require gravitationally simulating its billions of stars.
+
+7.4 Validation
+Catalog import should check:
+- Duplicate IDs.
+- Invalid parent references or cycles.
+- NaNs/infinities.
+- Negative mass/radius where forbidden.
+- Unsupported units.
+- Missing asset paths.
+- Impossible date/coordinate fields.
+- Conflicts between orbital period and other orbital elements.
+- Missing provenance on imported scientific records.
+
+Use warnings when values look suspicious but may be physically possible. Use errors only where the record cannot be interpreted safely.
+
+===============================================================================
+08. CREATING STARS AND MULTI-STAR SYSTEMS
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/creating-a-star/
+
+The star manual discusses catalog records in CSV for large homogeneous star sets, and richer script-style records for individual stars and star systems. It refers to attributes such as coordinates, distance, apparent/absolute magnitude, spectral class, mass, radius, and temperature. It also describes a solver that can derive missing physical values when sufficient inputs exist, including an approximate luminosity from radius and temperature using the Stefan–Boltzmann relationship. The page also describes multi-star arrangements using a barycenter plus component stars and warns that a CSV star format has more limited expressive power.
+
+8.1 ORBITAL star data
+Required/basic fields:
+- Stable ID and name.
+- Optional catalog ID.
+- Mass in kg.
+- Radius in m.
+- Effective temperature in K.
+- Luminosity in W or solar-luminosity units.
+- Spectral class string, if sourced.
+- Position in world coordinates or relative to parent.
+- Velocity or orbital data.
+- Visual color derived from temperature only as an approximation.
+- Provenance and confidence/uncertainty.
+
+Optional fields:
+- Apparent magnitude with observing-band definition.
+- Absolute magnitude.
+- Distance from observer/reference frame.
+- Rotation period.
+- Flattening/oblateness.
+- Corona parameters.
+- Stellar wind proxy.
+- Accretion disk or relativistic jet presentation for applicable exotic objects.
+- Component relationships for binary/multiple systems.
+
+8.2 Stellar parameter solver
+If inputs are missing, compute only values that are mathematically determined from known inputs and explicitly record derived provenance. Example:
+L = 4 * pi * R^2 * sigma_SB * T_eff^4
+where sigma_SB is the Stefan–Boltzmann constant.
+
+Do not fabricate missing mass from spectral type unless you label the value as a model-based estimate. Keep original measurements intact so users can compare them with derived values.
+
+8.3 Multi-star systems
+Use a StarSystem/Barycenter entity whose children are component stars. Each component has its own mass and relative orbital state. When simulating, center-of-mass conditions should be coherent. For a simple binary:
+- Define total mass.
+- Define relative orbit.
+- Convert the relative state into component states around the barycenter.
+- Ensure momentum is balanced if the initial system is intended to have zero net momentum.
+- Render each star independently while preserving system identity in the Explorer.
+
+8.4 Stellar rendering
+- Blackbody-inspired temperature-to-color mapping.
+- Emissive sphere with optional surface granulation shader.
+- Corona/halo optional.
+- Star glare/bloom separate from physical luminosity.
+- Saturation/exposure must not be treated as stellar temperature.
+- Binary stars need distinct point sources and combined illumination.
+
+8.5 Acceptance criteria
+- Creating a star adds a selectable object.
+- Editing mass and radius updates diagnostics.
+- Editing temperature changes rendered color without silently altering mass.
+- Editing luminosity changes emission/illumination through the appropriate independent property.
+- A binary star can be saved, reloaded, and tracked as one system or individual components.
+- Missing inputs appear as unknown or documented estimates, not hidden constants.
+
+===============================================================================
+09. CREATING PLANETS AND PLANETARY SYSTEMS
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/creating-a-planet/
+
+The SpaceEngine planet guide recommends starting from a similar procedural planet, exporting or copying its definition, assigning the intended host body, adjusting orbit fields, and then tuning planet parameters through an editor and the script. It describes parameters for physical dimensions, mass, class, rotation, axial orientation, albedo, brightness/color, surface procedural controls, clouds, atmosphere, rings, orbit, and other appearance features. The page cautions that editor changes may not automatically persist and may require manual script edits in the documented version.
+
+ORBITAL should improve this workflow rather than reproduce its limitations: the editor must have explicit Apply/Revert/Save behavior and live edits should be represented in an undoable model.
+
+9.1 Planet definition
+Physical parameters:
+- ID and name.
+- Parent body ID.
+- Mass.
+- Mean radius.
+- Optional equatorial/polar radius or oblateness.
+- Rotation period and epoch.
+- Axis tilt and pole orientation.
+- Initial position/velocity or orbital elements.
+- Density derived from mass/volume if spherical assumptions are selected.
+- Surface gravity derived when appropriate.
+
+Thermal/illumination parameters:
+- Bond albedo.
+- Geometric albedo when useful for observational brightness.
+- Emissivity or simplified thermal parameters.
+- Atmospheric composition and pressure as optional authored inputs.
+- Greenhouse adjustment only if the model clearly declares its assumptions.
+- Incident stellar radiation derived from host-star luminosity and distance when possible.
+
+Visual parameters:
+- Texture set or procedural seed.
+- Surface style preset.
+- Ocean coverage/color.
+- Terrain amplitude and frequency.
+- Cloud layers.
+- Atmosphere material/model.
+- Rings.
+- Night-light map/emission.
+- Color grading independent from physics.
+
+9.2 Orbital definitions
+ORBITAL should support two ways to define initial motion:
+A. Cartesian state: position and velocity vectors in a specified frame.
+B. Keplerian elements: semimajor axis, eccentricity, inclination, ascending-node longitude, argument of periapsis, and mean anomaly/epoch.
+
+The importer converts orbital elements to a state vector under clearly specified conventions. Include tests for units, angle units, frame orientation, and epoch.
+
+For a two-body approximation, the orbital period is derived from the semimajor axis and total mass when the orbit is bound and the chosen assumptions apply. If users supply contradictory period and orbital data, warn and ask which field is authoritative.
+
+9.3 Surface gravity
+For a spherical approximation:
+g = G * M / R^2
+
+If the user edits mass with radius fixed, gravity changes proportionally to mass. If the user changes both radius and mass, calculate the resulting value rather than assuming a simple proportional relationship.
+
+Show a small live explanation with the selected assumptions and units. Provide a graph of surface gravity against mass for fixed radius, and allow radius to be swept separately.
+
+9.4 Planet classes and presets
+Use a class system for initial appearance and default parameter ranges, not a rigid physical law. Possible classes include terrestrial rocky, ocean world, desert, ice world, gas giant, ice giant, lava world, dwarf planet, airless rock, and custom. Avoid assuming all planets of one class look identical.
+
+9.5 Editing workflow
+- Create New Body opens a wizard.
+- Start from blank, template, duplicate selected body, or procedural random generation.
+- Set name, parent, physical properties, and initial state.
+- Choose appearance preset and seed.
+- Preview immediately.
+- Validate fields and show warnings.
+- Apply edits in the current session.
+- Save to current scenario or export a reusable body definition.
+- Undo/redo all property edits.
+- Provide a “reset to template” option without erasing unrelated fields.
+
+9.6 Procedural-versus-observed distinction
+Solar-system objects may use authored, measured, or photographic maps; generated exoplanets can use procedural surfaces. An object may have a real orbital state and procedural visual surface. Label such dimensions separately. Do not imply that generated terrain is an observed terrain map.
+
+9.7 Atmosphere parameters
+The manual documents parameters such as density, molar mass, adiabatic index, greenhouse effect, appearance brightness/opacity, sky illumination, hue/saturation, and composition by gas percentage. ORBITAL may implement a reduced model at first:
+- Surface pressure or base density.
+- Scale height or an explicitly derived approximation.
+- Rayleigh/Mie scattering coefficients, or a named preset that maps to them.
+- Planet atmosphere color/opacity for art direction.
+- Composition list with percentages summing to 100% when physical chemistry is enabled.
+- Greenhouse/temperature controls only in a separately labeled climate approximation.
+
+Avoid overpromising a climate simulator. A render atmosphere model is not a climate model. Atmospheric composition alone is not enough for realistic weather, clouds, or surface temperatures.
+
+9.8 Rings
+The SpaceEngine guide describes ring textures and parameters for inner/outer radius, front/back illumination, opacity/density, brightness, and rotation. ORBITAL can support:
+- Ring inner/outer radius relative to body radius.
+- Optical depth/opacity proxy.
+- Particle color/albedo.
+- Front/back lighting response.
+- Inclination and precession if implemented.
+- Shadow casting to parent planet.
+- Optional gap patterns and procedural radial bands.
+
+Separate ring physical parameters from visual texture scale. Rings need a transparent or deferred rendering solution and careful sorting/depth handling.
+
+9.9 Clouds
+Multiple cloud layers are useful as a rendering feature. Each cloud layer should have altitude, scale, opacity, rotation speed, texture or procedural pattern, and lighting parameters. Make cloud animation independent from planet surface rotation if users need it. A tidally locked climate pattern can be a visual preset, but don't claim atmospheric dynamics unless actually simulated.
+
+===============================================================================
+10. PLANET TEXTURES AND CUBE-MAP TILING
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/planet-textures/
+
+The texture documentation describes a utility named CubeMap that transforms a cylindrical/equirectangular-style input map into a cubemap representation and can produce raw data or tiled images at multiple LODs. It also describes a companion Glue utility for combining tile data. Its configuration files use simple name/value entries, and the tooling has command-line options for specifying input/output paths.
+
+10.1 Core concept
+A rectangular world map projected onto a sphere creates distortion, especially near poles. A cube-sphere representation divides the surface into six cube faces that can be subdivided into tiles, which makes adaptive LOD possible.
+
+ORBITAL should not depend on the legacy CubeMap executable. Implement an independent asset pipeline with:
+- Source texture import.
+- Projection detection/choice.
+- Equirectangular-to-cube conversion.
+- Seam handling between cube faces.
+- Mipmap generation.
+- LOD tile generation.
+- Optional compression to GPU-supported formats.
+- Preview of source, conversion, and seams.
+- An asset manifest that records source and generated outputs.
+
+10.2 Texture channels
+Support independent channels or texture maps:
+- Albedo/base color.
+- Normal map.
+- Height/displacement data.
+- Roughness.
+- Metallic/specular where appropriate.
+- Ambient-occlusion approximation.
+- Emissive/night-lights.
+- Cloud alpha.
+- Ring alpha/radial profile.
+
+Do not pack every channel into arbitrary RGBA without a documented layout. If channel packing is used, store layout metadata.
+
+10.3 Tile generation
+- Generate levels from low to high resolution.
+- Include edge gutters/borders to reduce seams if the sampling scheme needs them.
+- Make adjacent cube-face borders sample the same mathematical surface.
+- Use a stable tile ID: body ID + cube face + mip/LOD + x + y.
+- Allow cancellation if the user changes seeds or exits preview.
+- Limit in-flight tiles and memory.
+- Store a cache key derived from source hash and generation settings.
+- Display loading/progress and report failed tiles.
+
+10.4 Asset quality validation
+- Verify image dimensions and channel count.
+- Detect corrupt images.
+- Warn about non-power-of-two sizes only when a target path genuinely has a constraint.
+- Check color-space metadata; albedo is typically sampled as color, while normal/roughness/height are data maps.
+- Visualize normal direction and height gradients.
+- Preview pole behavior and cube seams.
+
+10.5 Texture import UX
+The user should be able to drag a supported image into the planet editor, assign its map type, choose its projection, set scale/tiling, preview, and save. Do not require the user to manually generate every cube-face tile for a standard case.
+
+===============================================================================
+11. BIOMES, TERRAIN SAMPLES, AND SOIL MATERIALS
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/planet-biome-presets/
+
+The SpaceEngine documentation separates mid-scale terrain sample textures (examples include broad patterns such as forests or dunes) from fine-scale soil materials (examples include pebbles and grains). It associates sample textures with biome presets and describes presets that affect procedural planet appearance. It also describes color/displacement/roughness channels for sample textures; finer materials may use albedo, normal, roughness/height/AO channels; the manual specifies example image dimensions and compressed texture formats for that product/version. These exact sizes/formats should not be treated as universal constraints for ORBITAL.
+
+11.1 ORBITAL biome model
+A biome preset can contain:
+- Stable ID and display name.
+- Eligible planet classes.
+- Temperature and climate band metadata.
+- Terrain sample layers.
+- Mid-scale albedo and roughness maps.
+- Height influence/terrain amplitude.
+- Palette colors for biome zones.
+- Soil-material library references.
+- Cloud/ocean/ice palette values.
+- Randomization weights.
+- Procedural seed handling.
+- Version and author metadata.
+
+11.2 Separate the three scales
+A. Planet-scale shape: continental or large topographic forms.
+B. Biome-scale textures: terrain region coloration/patterns.
+C. Fine-scale soil material: small rocks, granular surfaces, scratches, grains.
+
+Do not use a high-frequency texture to fake large actual terrain geometry when the user expects a physically changing silhouette. Conversely, don't subdivide geometry just to represent tiny roughness that normal mapping can handle.
+
+11.3 Biome-to-surface selection
+- Generate broad climate/height zones from seed and planet parameters.
+- Blend neighboring biome materials with stable masks.
+- Avoid abrupt color seams.
+- Respect optional latitude, elevation, temperature, and moisture controls.
+- Define probabilities for procedural biome selection.
+- Store the seed and preset version so that regeneration is reproducible.
+- Provide an inspector that reveals the active biome/material at a selected point.
+
+11.4 Soil-material library
+Each material should declare:
+- Albedo source.
+- Normal source.
+- Roughness source.
+- Optional height/AO channels.
+- UV scale/world scale.
+- Blend rules by slope and color/biome mask.
+- Optional detail layer.
+- Tiling suppression settings such as random rotation or domain warping.
+- Compression settings.
+- Preview sphere and surface patch.
+
+11.5 Seam and tiling-removal methods
+A repeated texture can look artificial. Consider:
+- Rotated or mirrored sampling where the material remains valid.
+- Triplanar mapping for selected materials.
+- Domain warping.
+- Multi-scale blending.
+- Stochastic sampling.
+
+Each method has trade-offs. Stochastic tiling reduction can increase shader cost and may affect normal-map orientation. Implement one robust method before adding several.
+
+11.6 Editor UX
+- Palette of biome presets.
+- Palette of soil materials.
+- Live preview sphere and a terrain patch.
+- Material layer reorder/enable.
+- Weight and scale sliders.
+- Clone/rename/save presets.
+- Reset selected layer.
+- Display missing references clearly.
+- Hot-reload only the changed material where technically safe.
+
+11.7 Scientific integrity
+A biome is a visual classification/preset unless an actual climate/ecology simulation is implemented. Do not imply that an exotic-looking world contains real biology simply because a preset is named “life-bearing.” If life is a procedural fiction label, say so.
+
+===============================================================================
+12. DEEP-SPACE OBJECTS: GALAXIES, CLUSTERS, NEBULAE
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/creating-a-dso/
+
+The DSO guide covers catalog entries for galaxies, star clusters, and nebulae. It describes different catalog categories, data fields for galaxy/cluster/nebula records, and the ability to assign standard or custom models. The page notes that the referenced SpaceEngine version does not procedurally generate every galaxy/nebula model from first principles and uses standard models for many such records.
+
+12.1 Design implication
+A universe explorer needs rendering representations at vastly different scales. The visual representation can be a point/sprite, billboard, volumetric model, or detailed 3D object, depending on distance and object class.
+
+12.2 ORBITAL DSO catalog fields
+- Stable ID and canonical name.
+- Type: galaxy, cluster, nebula, quasar-like point source if supported.
+- Celestial coordinates and coordinate epoch when known.
+- Distance estimate and uncertainty.
+- Apparent brightness/photometric band where available.
+- Physical metadata as reported by the source.
+- Parent galaxy/group reference.
+- Morphology classification if sourced.
+- Custom model reference or procedural render preset.
+- Asset provenance and license.
+
+12.3 Galaxy render modes
+- Far: point source or compact sprite.
+- Mid-distance: billboard/impostor or analytic spiral/elliptical shape.
+- Close: volumetric approximation or dedicated mesh/noise field.
+- In all cases: preserve the catalog object identity and measured data independent of its visual LOD.
+
+12.4 Nebula render modes
+- Sprite/mesh billboards for background nebulae.
+- Volumetric raymarching only for a limited number of selected/nearby nebulae.
+- Noise-based density field and emission/absorption parameters.
+- Interstellar dust/reddening as an optional rendering effect; do not globally change catalog brightness without documenting it.
+
+12.5 Star cluster visualization
+- A cluster can be an aggregate plus optional member stars.
+- When distant, render as a luminous group.
+- When nearby, show actual individually catalogued stars if data exists.
+- Avoid dynamically simulating every member unless user explicitly activates a high-cost model.
+
+12.6 Data model boundary
+A deep-space object's mass, size, distance, visual brightness, and render size are different concepts. Do not use screen radius as the physical radius. Keep all these values in separate named fields.
+
+===============================================================================
+13. SPACESHIPS AND MODULAR MODELS
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/creating-a-ship/
+
+The ship manual describes spacecraft formed from one or multiple reusable model parts. It describes model configuration and material/texture references, importing models from common interchange formats, organizing model/texture files within an add-on, and editing the whole ship's position/orientation and cameras. It notes that repeated modules can reduce video-memory use when shared instead of duplicated.
+
+13.1 ORBITAL ship asset pipeline
+- Import OBJ or glTF in a later milestone; choose a single well-supported format first.
+- Convert materials to the engine's internal PBR representation.
+- Support texture maps and material fallbacks.
+- Share meshes/materials between repeated modules.
+- Compute bounding volumes.
+- Provide explicit scale and unit conversion.
+- Include axis/orientation preview.
+- Support root transform and child modules.
+- Keep a model manifest with license/author/source.
+
+13.2 Ship components
+- Hull.
+- Engines/thrusters.
+- Tanks or detachable modules as visible parts.
+- Radiators/solar panels.
+- Docking connectors if implemented.
+- Optional engine effect emitters.
+- Cockpit/view cameras.
+
+Do not implement every module type initially. Start with imported static meshes, transform hierarchy, materials, and one free camera. Add propulsion/ship simulation only after the orbital physics is stable.
+
+13.3 Ship simulation modes
+A. Passive spacecraft: follows physics or a predefined trajectory.
+B. Maneuverable spacecraft: mass, thrust, fuel, and control inputs influence acceleration.
+C. Visual-only ship: no physical simulation, useful for scene staging.
+
+The UI must tell the user which mode is active.
+
+13.4 Maneuver model
+For a maneuverable spacecraft, define:
+- Dry mass.
+- Propellant mass.
+- Thrust magnitude and direction.
+- Specific impulse, only if the model actually supports mass flow.
+- Control update rate.
+- Fuel consumption.
+- Attitude/orientation if thrust direction depends on orientation.
+
+Do not label a constant-acceleration shortcut as a realistic engine model unless it is visibly marked as simplified.
+
+13.5 Model editor
+- Orbit camera around model.
+- Pan/zoom.
+- Display axes and pivot/origin.
+- Set object transform numerically.
+- Inspect and correct scale.
+- Assign materials.
+- Preview engine exhaust at multiple quality levels.
+- Save as an ORBITAL model asset rather than editing the original source file in place.
+
+13.6 Reuse and performance
+Instancing and shared mesh resources matter because a modular spacecraft may repeat engines, panels, or truss sections. Resource ownership should be reference-counted or managed by a stable asset cache; do not destroy a mesh while another instance still uses it.
+
+===============================================================================
+14. SCENARIO SCRIPTING AND GUIDED EXPERIENCES
+===============================================================================
+
+Source: https://spaceengine.org/manual/making-addons/scenario-scripts/
+
+The SpaceEngine scenario manual describes text files executed by the application and commands usable interactively or from a script. It includes movement/navigation operations, camera path/spline tools, waiting for triggers, showing/hiding object types and overlays, showing/hiding specific objects, variable/settings manipulation, and other interactive tutorial mechanisms. Commands can use structured parameter blocks. Trigger conditions may refer to object selections, controls, dates, values, UI widgets, and other events. The documentation warns that some names are case-sensitive and that commands can execute immediately unless a wait/delay is inserted.
+
+This is a key product pattern. Build a script engine for repeatable scientific experiments and onboarding, but do not copy SpaceEngine's proprietary syntax without an explicit compatibility need.
+
+14.1 ORBITAL script goals
+The script language should allow an author to:
+- Load a scenario.
+- Spawn or remove bodies.
+- Set the simulation date/time or paused state.
+- Set/animate a camera.
+- Focus on a body.
+- Toggle overlays.
+- Change selected visual parameters.
+- Display explanatory text/dialogs.
+- Wait for duration or user action.
+- Wait until a measurable condition occurs.
+- Start/stop plots or record data.
+- Pause at a lesson checkpoint.
+- Write simulation diagnostics into an experiment report.
+
+14.2 First implementation should not be a full general language
+Use declarative JSON scenario steps or a small command DSL. A constrained grammar is easier to validate, version, debug, and secure. Do not run native shell commands, arbitrary DLL loading, eval-like C++ execution, or uncontrolled file access from scripts.
+
+14.3 Proposed commands
+- scenario.load(id)
+- body.create(type, properties)
+- body.delete(id)
+- body.set(id, property, value)
+- simulation.pause()
+- simulation.resume()
+- simulation.step(count)
+- simulation.setTimeScale(value)
+- camera.focus(id, duration)
+- camera.setPose(position, orientation, duration)
+- camera.follow(id)
+- overlay.show(name, duration)
+- overlay.hide(name, duration)
+- message.show(title, text, duration)
+- wait.seconds(number)
+- wait.event(eventType, filter)
+- wait.condition(expression, timeout)
+- plot.start(series)
+- plot.stop(series)
+- checkpoint.save(name)
+- report.note(text)
+
+This is an illustrative target API. Final names should match project conventions.
+
+14.4 Event/trigger framework
+Events may include:
+- ObjectSelected.
+- ObjectCreated.
+- CollisionOccurred.
+- BodyEnteredRadius.
+- SimulationTimeReached.
+- EnergyDriftExceeded.
+- EscapeConditionDetected.
+- UserPressedContinue.
+- CameraFocused.
+- PlotThresholdCrossed.
+
+Triggers should have timeout and cancellation semantics. Prevent a script from hanging forever waiting for an event that cannot occur. Log the active wait state to diagnostics.
+
+14.5 Camera paths
+Support camera keyframes/splines with:
+- Time or normalized path parameter.
+- Position or focus target.
+- Orientation.
+- Roll.
+- Duration/easing.
+- Relative-to-object coordinate mode.
+- Pause at keyframes.
+- Smooth interpolation.
+
+Don't interpolate Euler angles naively if it causes camera flips. Use quaternions for orientation or a documented look-at approach.
+
+14.6 Tutorials
+Build scripted lessons:
+- How to navigate and focus a body.
+- How to create a planet.
+- How changing mass alters acceleration.
+- How orbital eccentricity changes a trajectory.
+- What happens during a collision.
+- How escape velocity works.
+- What the Schwarzschild radius measures.
+- Which relativistic features are exact formulas versus approximations.
+
+Each tutorial should have learning goals, steps, expected results, and a reset/replay action.
+
+14.7 Script safety
+- Parser with strict syntax and types.
+- Maximum operation budget per frame.
+- Maximum recursion/nesting depth where relevant.
+- Timeouts for event waits.
+- No arbitrary disk paths outside scenario/add-on roots.
+- No native code execution.
+- Read-only access to internals unless a command explicitly changes them.
+- Validate body IDs and parameter names.
+- Catch runtime errors and show line/command location.
+- Provide dry-run/schema validation.
+
+===============================================================================
+15. FLIGHT SCHOOL: PILOTING AND COMMANDS
+===============================================================================
+
+Source: https://spaceengine.org/manual/space-flight-school/
+
+The Flight School page describes itself as a hands-on ship-piloting/commanding guide and explicitly warns readers that it is unofficial, may contain conceptual/theoretical errors, and may lag behind versions. Treat it as evidence that the application has a rich piloting workflow, not as a source of unquestionable physical equations.
+
+ORBITAL's flight school should be independently authored and tied to ORBITAL's actual implemented controls.
+
+15.1 Navigation tutorials
+- Free camera vs spacecraft camera.
+- Focus on an object.
+- Follow an object.
+- Translate/rotate camera.
+- Set the movement speed.
+- Approach and retreat from a planet.
+- Switch from system-scale to surface-scale view.
+- Restore the overview.
+
+15.2 Spacecraft tutorials
+Only after a real vehicle dynamics layer exists:
+- Thrust direction versus velocity direction.
+- Newton's first law in space.
+- Relative motion.
+- Changing an orbit with an impulse.
+- Circularization as a simplified maneuver exercise.
+- Transfer orbits as a later feature.
+- Orientation and docking if implemented.
+- Fuel/thrust limits if modeled.
+
+15.3 Important teaching rule
+Do not teach an orbital maneuver by playing an animation that only looks physically plausible. The lesson should either manipulate real simulated state or clearly identify the demonstration as a visualization. For example, a “burn” should apply an impulse or thrust model if the course describes the craft's resulting trajectory as simulated.
+
+15.4 Inputs must be discoverable
+- On-screen control hints.
+- Contextual tooltips.
+- Rebindable controls.
+- Mouse sensitivity.
+- Flight/camera mode indicator.
+- Pause state indicator.
+- Accessibility option for reduced camera acceleration or screen shake.
+
+===============================================================================
+16. LICENSE, CREDITS, AND ASSET HYGIENE
+===============================================================================
+
+Source: https://spaceengine.org/manual/license/
+
+The official license page distinguishes the standard non-commercial terms from SpaceEngine PRO terms for commercial use. It notes that certain texture packs are allowed as part of SpaceEngine but not separately, and that music may have third-party copyright restrictions. The page also lists credits for contributed code, rendering models, shaders, and assets.
+
+Legal/product requirement for ORBITAL:
+- Do not copy SpaceEngine's source code. Its FAQ says the program is proprietary closed-source software.
+- Do not extract and redistribute SpaceEngine textures, soundtrack, models, shaders, screenshots, or scripts as ORBITAL assets without explicit licensing permission for each use.
+- Do not assume attribution alone makes a proprietary asset reusable.
+- Use assets created by the team, properly licensed open assets, or procedurally generated assets.
+- Preserve license files and attributions for third-party libraries.
+- Keep asset metadata in a manifest containing source URL, author, license, retrieval date, and required attribution.
+- If using data from public astronomical catalogs, review those dataset's own terms rather than assuming all astronomical data has the same license.
+- Review the current license before commercial distribution.
+
+16.1 Suggested asset directory metadata
+Each externally sourced asset record should include:
+- asset_id
+- relative_path
+- source_url
+- creator
+- license_id
+- attribution_text
+- date_acquired
+- redistribution_allowed
+- modification_allowed
+- notes
+
+16.2 Originality rule
+Use SpaceEngine as a reference for broad product concepts and workflow patterns, not as an asset source or an implementation specification to copy line-by-line. ORBITAL must have original naming, UI composition, code, shaders, documentation, and default scenario assets.
+
+===============================================================================
+17. ORBITAL PRODUCT SCOPE AND FEATURE TAXONOMY
+===============================================================================
+
+Organize feature scope into three tiers to avoid attempting 100 major features before one works.
+
+TIER 1 — Core scientific sandbox
+- 3D starfield.
+- Solar-system scenario.
+- Camera navigation and focus.
+- Body selection and inspector.
+- Creation and editing of stars/planets/moons/black-hole visual objects.
+- Newtonian N-body gravity.
+- Stable integration with fixed timestep.
+- Orbit trails and orbital parameters.
+- Time controls.
+- Collision detection and documented response models.
+- Mass/force/gravity laboratory.
+- Scenario save/load.
+- Diagnostics/logs/tests.
+
+TIER 2 — SpaceEngine-inspired explorer and procedural world authoring
+- Object browser and catalog import.
+- Search by name/type.
+- Procedural planet surface.
+- Atmospheres, clouds, rings, night lights.
+- Preset library and biome/material system.
+- Deep-space object catalog/rendering.
+- Add-on package manager.
+- Scenario tutorials and safe scripting.
+- Import/export of custom assets.
+- GPU quality presets and profiling.
+
+TIER 3 — Advanced research-grade and high-cost options
+- Barnes–Hut gravity acceleration for larger N-body sets.
+- More advanced collision fragmentation.
+- Relativistic test-particle integrators.
+- Black-hole lensing quality levels.
+- Spacecraft propulsion and orbital maneuvers.
+- Terrain quadtree LOD and high detail materials.
+- Volumetric nebula/galaxy modes.
+- More advanced illumination/shadowing.
+- Checkpoint/replay history.
+- Optional external astronomical data ingestion.
+
+Do not interpret a tier label as a commitment that all listed features fit a single short implementation cycle. Each feature needs a test, UI acceptance criteria, performance budget, and explicit limitations.
+
+===============================================================================
+18. ORBITAL ARCHITECTURE AND CODE LAYOUT
+===============================================================================
+
+Use the project's existing Visual Studio structure. If it is already a Windows console-subsystem app with a graphics window, keep that setup. Do not create a disconnected CMake demo or move all source to an unrelated directory merely to match a suggested diagram.
+
+Logical module layout:
+
+src/core/
+  Application
+  AppConfig
+  Logger
+  EventBus
+  SimulationClock
+  CommandQueue
+
+src/platform/
+  Window
+  Input
+  FileSystem
+  CapabilityQuery
+
+src/universe/
+  Universe
+  BodyRegistry
+  ObjectId
+  ObjectCatalog
+  ParentGraph
+  AssetLocator
+  AddonManager
+
+src/celestial/
+  CelestialBody
+  Star
+  Planet
+  Moon
+  SmallBody
+  BlackHole
+  DeepSpaceObject
+  Spacecraft
+  RingSystem
+  AtmosphereDefinition
+
+src/physics/
+  GravitySolver
+  Integrator
+  CollisionSystem
+  OrbitalElements
+  ConservationDiagnostics
+  TrajectoryPredictor
+  TimeScalePolicy
+
+src/relativity/
+  SchwarzschildModel
+  TestParticleGeodesicSolver
+  RelativisticDiagnostics
+  LensingApproximationParameters
+
+src/graphics/
+  Renderer
+  RenderGraph
+  Camera
+  FloatingOrigin
+  MeshCache
+  TextureCache
+  ShaderProgram
+  PlanetRenderer
+  StarRenderer
+  AtmosphereRenderer
+  RingRenderer
+  DSOImpostorRenderer
+  BlackHoleRenderer
+  OrbitRenderer
+  PostProcessing
+
+src/procedural/
+  Noise
+  PlanetSurfaceGenerator
+  TerrainTileScheduler
+  CubeSphere
+  BiomeResolver
+  MaterialComposer
+  TexturePipeline
+
+src/ui/
+  MainToolbar
+  ObjectExplorer
+  ObjectInspector
+  CreateBodyWizard
+  PlanetEditor
+  MaterialEditor
+  ScenarioBrowser
+  DiagnosticsPanel
+  PlotPanel
+  SettingsPanel
+
+src/scripting/
+  ScriptParser
+  ScriptValidator
+  ScriptVM
+  ScenarioRuntime
+  TriggerSystem
+
+src/persistence/
+  ScenarioSerializer
+  CatalogLoader
+  SchemaMigrator
+  CheckpointStore
+
+src/tests/
+  unit tests and deterministic simulation tests
+
+Architecture rules:
+- UI issues commands into the simulation model instead of mutating physics objects from arbitrary widget callbacks.
+- Physics owns dynamic state and decides when it advances.
+- Renderer consumes a stable snapshot of the state it needs.
+- Catalog definitions are not identical to runtime simulation objects.
+- Asset lookup goes through one resolver.
+- Scripts call approved commands/events, not private C++ functions.
+- All major data formats are versioned.
+- Units are explicit in schemas and documented in code.
+- Avoid global mutable state where ownership can be clear.
+- Stable IDs are used for cross-module references.
+- Resource lifetime for OpenGL objects is RAII-managed and follows context lifetime.
+
+===============================================================================
+19. PHYSICS AND NUMERICAL SIMULATION
+===============================================================================
+
+This project needs two distinct modes: a manageable high-fidelity local simulation and a universe-scale visualization mode. A single all-to-all physical simulation of every catalog star/galaxy is not feasible or meaningful.
+
+19.1 Internal units
+Use SI units internally:
+- Distance: metres.
+- Mass: kilograms.
+- Time: seconds.
+- Velocity: m/s.
+- Acceleration: m/s^2.
+- Angles: radians internally.
+- Energy: joules.
+- Temperature: kelvin.
+
+Convert at input/output boundaries. Every serialized numeric property should either have its unit in the schema or belong to a schema with strictly defined units.
+
+19.2 Newtonian gravity
+For bodies i and j:
+F = G * m_i * m_j / r^2.
+
+Vector acceleration from body j onto body i:
+a_i += G * m_j * (x_j - x_i) / |x_j - x_i|^3.
+
+Reference constant:
+G = 6.67430e-11 m^3 kg^-1 s^-2.
+
+Do not calculate a singular division at zero distance. Collision detection, minimum-distance policies, softening, or a carefully handled encounter model must define what occurs as bodies approach.
+
+19.3 Source bodies and test particles
+A dynamic massive body sources gravity and responds to gravity. A test particle responds to gravity but has no source contribution. A kinematic/pinned body may source gravity but does not update from integration. These modes need explicit flags, because they are scientifically different.
+
+19.4 Numerical integrators
+Start with semi-implicit Euler for simple debugging and velocity Verlet for a baseline suitable for orbital experiments. RK4 can be useful for comparison and selected problems, but it is not automatically the best long-term orbital integrator. For high-eccentricity encounters, strong perturbations, or close approaches, implement adaptive substeps or a more suitable method later.
+
+A fixed timestep means a constant step in simulated seconds; it does not mean a constant wall-clock rate. The physics accumulator must be independent of render delta time. At high time acceleration, run bounded substeps rather than giving the integrator one gigantic time jump.
+
+19.5 Unit-testable solver API
+- ComputeAcceleration(states, settings) -> acceleration array.
+- Step(states, dt, settings) -> new state.
+- ComputeEnergy(states) -> kinetic/potential/total.
+- ComputeMomentum(states) -> vector.
+- ComputeAngularMomentum(states) -> vector.
+- ComputeCenterOfMass(states) -> vector.
+- ComputeOrbitalElements(primary, body, frame) -> optional element set.
+
+Avoid calls that perform rendering or UI work as part of physics calculations.
+
+19.6 Gravity scaling experiment
+At fixed distance r:
+a = G*M/r^2.
+If mass doubles, acceleration doubles.
+If distance doubles, acceleration is quartered.
+
+At the surface of a spherical body of radius R:
+g = G*M/R^2.
+Escape speed from the surface, under the ideal non-rotating/no-atmosphere approximation:
+v_escape = sqrt(2*G*M/R).
+
+UI must show fixed variables. If the mass editor changes radius due to a “constant density” option, surface gravity is not expected to follow the same simple mass-only proportionality. Provide toggles for “hold radius fixed”, “hold density fixed”, or “direct edit”, and show the resulting radius/mass assumptions.
+
+19.7 Orbital period
+For an ideal two-body bound orbit with semimajor axis a and component masses M and m:
+T = 2*pi*sqrt(a^3/(G*(M+m))).
+
+Do not blindly use this formula for strongly perturbed N-body orbits and call it a precise observed period. Label it an osculating/approximate two-body period when derived from an instantaneous state in an N-body simulation.
+
+19.8 Conservation
+For an isolated Newtonian system under pairwise gravity:
+K = sum_i(0.5*m_i*|v_i|^2).
+U = -sum_{i<j}(G*m_i*m_j/r_ij).
+E = K + U.
+
+Calculate each pair once. Track energy drift relative to the initial value, plus linear and angular momentum. Collisions, merging, restitution, external forces, softening, or pinned bodies alter conservation expectations. Report these factors in diagnostics.
+
+19.9 Collision models
+Implement at least:
+- No response / detect only.
+- Elastic-ish bounce with coefficient of restitution for simplified demonstration.
+- Inelastic bounce.
+- Merge bodies conserving mass and linear momentum.
+
+For merging two bodies:
+M = m1 + m2.
+v_merge = (m1*v1 + m2*v2)/(m1+m2).
+x_com = (m1*x1 + m2*x2)/(m1+m2).
+
+For volume-conserving spherical merge, a combined radius can be estimated as cube root of summed spherical volumes if common-density assumptions are appropriate. Real impact outcomes may involve heating, deformation, fragmentation, and mass loss. Do not describe a sphere merge as detailed impact hydrodynamics.
+
+19.10 Collision broad/narrow phase
+Broad phase filters candidate pairs using bounding volumes or spatial partitioning. Narrow phase performs actual overlap/contact calculations. For a first version, spheres are appropriate. Later add more accurate shapes only if collision use cases justify them.
+
+19.11 Orbit trails
+Trails must not render stale/incorrect paths after edits or collision events. Define whether the path is:
+- Previous trajectory history.
+- Future prediction sampled from the current state.
+- Analytical two-body osculating orbit.
+
+Label these separately in the UI. A predicted trajectory is a model result, not a guarantee under future collisions/perturbations.
+
+===============================================================================
+20. RELATIVITY AND BLACK-HOLE MODEL BOUNDARIES
+===============================================================================
+
+The goal is scientifically honest relativistic demonstrations, not the false claim that an OpenGL shader equals a general-relativistic simulation.
+
+20.1 Schwarzschild radius
+For a non-rotating black hole:
+r_s = 2*G*M/c^2.
+
+c = 299792458 m/s.
+
+Radius scales linearly with mass. It is the Schwarzschild event-horizon radius for the idealized non-rotating, uncharged solution. For a rotating Kerr black hole the horizon structure differs; do not use the same formula and label it exact for Kerr.
+
+20.2 Model layers
+Layer A — Newtonian point-mass approximation
+- Used for general N-body gravity outside the strong-field regime.
+- Not exact close to the horizon.
+- Needs a capture/horizon policy to avoid singular forces.
+
+Layer B — Relativistic test-particle integration
+- Separate solver for geodesics in a selected fixed spacetime, such as Schwarzschild.
+- Define coordinates, metric convention, constants of motion, units, and initial conditions.
+- Test known properties such as photon sphere and ISCO in ideal Schwarzschild spacetime.
+- Not a fully self-consistent multi-body Einstein-equation solver.
+
+Layer C — Visual lensing
+- Screen-space distortion/ray approximation or environment-map approach.
+- Not the trajectory solver.
+- Renderer quality controls must not change the physical solver values.
+
+Layer D — Full numerical relativity (future/research only)
+- Out of first-release scope.
+- Requires solving the Einstein equations with a numerical relativity formulation, gauge conditions, constraint handling, boundary conditions, and heavy compute.
+
+20.3 Important Schwarzschild reference values
+For ideal Schwarzschild geometry:
+- Photon sphere: r = 1.5*r_s.
+- ISCO for ideal test-particle circular timelike orbits: r = 3*r_s.
+These are model-specific values. The UI should show the domain assumption.
+
+20.4 Time dilation
+Do not show a universal “time runs slower by X” number without defining observer and location. For a stationary observer outside an ideal Schwarzschild black hole, a commonly used gravitational redshift/time-rate factor involves sqrt(1-r_s/r). This comparison has constraints: stationary observers cannot hover arbitrarily close to the horizon without enormous acceleration, and coordinate time versus proper time must be clearly distinguished.
+
+20.5 Tidal effects
+For a simple scale estimate, differential gravity varies with mass and distance. Display a clearly labeled approximation that compares acceleration across a selected body diameter. Do not imply it is a complete material-strength/disruption model.
+
+20.6 Accretion disk visualization
+- Radial disk geometry.
+- Temperature-inspired colors.
+- Density/opacity profile.
+- Rotation animation.
+- Inclination.
+- Optional Doppler-brightening artistic/physical approximation.
+- Lensing warp of the background/disk.
+- Optional jet visual effect.
+
+Separate disk visuals from physical accretion dynamics. A rotating glowing disk isn't proof that a fluid solver is implemented.
+
+20.7 Scientific UI labels
+Use labels such as:
+- “Newtonian N-body gravity”.
+- “Schwarzschild test-particle mode”.
+- “Approximate gravitational lensing shader”.
+- “Accretion disk: visual model”.
+- “Full numerical relativity: not implemented”.
+
+Never label the full application “fully general relativistic” unless it actually solves the relevant equations for the stated domain.
+
+===============================================================================
+21. RENDERING ARCHITECTURE AND SHADER PLAN
+===============================================================================
+
+21.1 OpenGL base
+Respect the context version already configured in the Visual Studio project. If the baseline is OpenGL 3.3 Core, use features available there and gate later features by runtime capability. Do not assume compute shaders, bindless textures, or geometry shaders exist because a development machine happens to support them.
+
+21.2 Rendering stages
+Suggested pipeline:
+1. Update camera-relative transform state.
+2. Render distant starfield/celestial sprites.
+3. Render opaque bodies and star surfaces.
+4. Render ring/transparent materials with an explicit sorting or OIT policy.
+5. Render atmosphere/cloud layers.
+6. Render trails, vectors, grid, and selection overlays.
+7. Apply black-hole lensing or other screen-space effects in a dedicated pass.
+8. Apply exposure, tone mapping, bloom, and optional dithering.
+9. Compose UI.
+
+The actual order may change based on framebuffer architecture and blending correctness. Document any deviations.
+
+21.3 Shader management
+- Load GLSL from external files.
+- Compile each shader and report complete compiler logs.
+- Link programs with clear failure reporting.
+- Cache uniform locations.
+- Validate required uniforms in debug builds.
+- Use a safe fallback shader for selected missing effects.
+- Reload changed shaders only through an explicit development/reload path.
+- Do not create/destroy shader programs every frame.
+
+21.4 GPU resource lifetime
+- Use RAII wrappers for textures, buffers, framebuffers, shader programs, and meshes.
+- Ensure the GL context outlives all resource destruction.
+- Do not free a shared resource while another instance references it.
+- Keep GPU resource creation on the thread/context model the application actually supports.
+- Record approximate VRAM use for major texture/target allocations where possible.
+
+21.5 Lighting
+- Use physically motivated inverse-square illumination for simulation-aware local bodies where numerical range allows it.
+- Use exposure and tone mapping rather than inventing arbitrary physical light levels to fit the display.
+- For distant stars, use a different rendering representation from nearby stellar spheres.
+- Define the distinction between object luminosity, received irradiance, material albedo, and camera exposure.
+
+21.6 Atmospheres
+Start with a robust atmosphere shader/rim effect and a documented scattering approximation. More advanced Rayleigh/Mie scattering is a later refinement. Check precision, depth, and performance on the actual GL target.
+
+21.7 Rings
+Use ring plane geometry with radial UVs or a radial profile. Handle transparency, self-shadow approximations, planet shadowing, and edge aliasing. A high-cost volumetric ring mode is optional.
+
+21.8 Planet geometry
+Start with UV sphere rendering and procedural fragment materials. Add cube-sphere quadtree terrain after core physics and UI are stable. Avoid forcing high tessellation for every planet at every distance.
+
+21.9 Starfield
+- Use deterministic star catalogs/seeds.
+- Use instancing or compact GPU buffers.
+- Vary color and brightness by data/procedural classification.
+- Do not use the same visual scale for every background object.
+- Limit twinkling effects so the scene remains calm and scientifically readable.
+
+21.10 Black-hole shader
+Implement a separate pass with parameters derived from the selected black-hole mass and display scale. Background distortion can use an approximation based on the lensing geometry or precomputed lookup. It must degrade gracefully if render targets are unsupported or expensive.
+
+21.11 Debug rendering
+Add toggles for:
+- World axes.
+- Body bounding spheres.
+- Velocity/acceleration vectors.
+- Contact points.
+- Orbit reference frames.
+- Camera frustum.
+- Terrain tile bounds.
+- LOD color bands.
+- Render-pass timing.
+
+Debug visualization will be necessary to diagnose behavior that otherwise looks like “bad physics” but is actually camera/scale/rendering error.
+
+===============================================================================
+22. PROCEDURAL PLANET GENERATION
+===============================================================================
+
+22.1 Determinism
+Every procedural planet must have a seed. Given the same seed, generator version, and parameters, output should be reproducible within the intended numerical/rendering tolerance. Record generator version so future algorithms do not silently change old saved planets.
+
+22.2 Generation stages
+1. Build broad noise fields / continent mask.
+2. Build elevation field.
+3. Derive slope and optional latitude/elevation/temperature masks.
+4. Select/blend biomes.
+5. Generate or sample albedo.
+6. Generate normal/roughness/detail maps.
+7. Generate optional ocean/ice/cloud masks.
+8. Build tile hierarchy.
+9. Upload/cache progressively.
+10. Provide a low-detail fallback during generation.
+
+22.3 Avoid common artifacts
+- Cube-face seams.
+- Visible repeated noise.
+- Hard biome borders.
+- Planet poles with stretched details.
+- Abrupt LOD popping.
+- Discontinuous normals at tile boundaries.
+- Overly noisy/contrasty surfaces that look like random static.
+- A single procedural seed producing identical planet layouts despite different class/temperature settings.
+
+22.4 Planet presets
+Preset definitions should control ranges and weights, not lock physical values. An “Ocean World” preset can bias ocean coverage and palette but should not silently assign unrealistic mass/density. Keep physical template values separate from visual defaults.
+
+22.5 Procedural gas giants
+Use banded noise in latitude/longitude or spherical direction coordinates, advection-like distortion, storms/cyclones, and layered cloud patterns. Treat them as visual turbulence unless a fluid simulation is actually running. Provide rotation and wind parameters that change the appearance predictably.
+
+22.6 Procedural craters
+For airless and rocky bodies, crater placement can be generated with spherical distributions, radius distributions, rim/ejecta profiles, and overlapping masks. For a first release, render crater shading and low-amplitude displacement; don't attempt geologic crater evolution.
+
+22.7 Preview workflow
+A material or terrain edit should update a selected preview body quickly, not rebuild every object in the universe. Cache derived data and invalidate only affected stages.
+
+===============================================================================
+23. UNIVERSE SCALE, CAMERA, AND VISUAL-COORDINATE DESIGN
+===============================================================================
+
+23.1 Two coordinate systems
+Simulation coordinates remain in physical units. Rendering coordinates may use camera-relative positions and deliberate visual scaling. These must never be mixed silently.
+
+23.2 Floating origin
+At large astronomical coordinates, ordinary single-precision vertex transforms lose detail. Keep simulation state in double precision, subtract camera position on CPU in double precision, then convert the nearby relative position to GPU-friendly floats. Rebase the rendering origin when needed without modifying physics state.
+
+23.3 Scale hierarchy
+Potential view contexts:
+- Surface/city scale.
+- Planet/moon system scale.
+- Planetary-system scale.
+- Interstellar scale.
+- Galaxy/extragalactic scale.
+
+Each may use different labels, clipping, LOD, and visual radii. Keep explicit scale mode metadata. Where visual sizes are exaggerated for readability, indicate it in the UI.
+
+23.4 Logarithmic depth
+A logarithmic depth strategy can extend depth range but has pipeline and precision trade-offs. Do not bolt on log depth without testing every opaque, transparent, and postprocess pass. An alternative is scale-tier rendering with camera-relative coordinates, near/far render passes, or controlled local views.
+
+23.5 Camera focus target
+Store the focused object ID and offset/orientation separately from the free camera position. This enables smooth transitions, following a moving planet, and camera tours without corrupting object motion.
+
+23.6 Navigation safety
+- Clamp invalid near/far planes.
+- Prevent NaN camera orientation.
+- Normalize quaternions.
+- Avoid gimbal lock.
+- Provide a one-click “return to system overview”.
+- A selected body should remain selected while the camera moves unless the user explicitly changes selection.
+
+===============================================================================
+24. DISCOVERY, SEARCH, SELECTION, AND OBJECT INSPECTOR
+===============================================================================
+
+24.1 Object Explorer
+Left panel or collapsible drawer with:
+- Search text.
+- Object-type filters.
+- Tree for host star -> planets -> moons.
+- Pin/favorite support.
+- Recent objects.
+- User-created objects.
+- Visibility toggle.
+- Jump/focus action.
+- Context menu: duplicate, edit, delete, export.
+
+24.2 Search engine
+Start with an in-memory indexed catalog. For large datasets, choose a persistent index after profiling. Index canonical names, alternate names, IDs, types, parent names, and optional tags. Use prefix/fuzzy matching only when it can be explained and disabled.
+
+24.3 Selection model
+Keep selection as a stable ObjectId, not a pointer into a vector that may be reallocated. If an object is merged/deleted, emit an event and update the selection. When bodies merge, offer to select the merged result.
+
+24.4 Inspector tabs
+Overview:
+- Name/type/parent.
+- Physical summary.
+- Displayed scale / render mode.
+- Data source/procedural flag.
+
+Physics:
+- Mass, radius, density.
+- Position, velocity, acceleration.
+- Surface gravity/escape velocity.
+- Orbit elements and energy where applicable.
+
+Appearance:
+- Material/seed.
+- Atmosphere/cloud/ring.
+- Texture assignments.
+- Render quality.
+
+History:
+- Creation/modification events.
+- Collisions.
+- Parameter changes.
+- Scenario state changes.
+
+Data:
+- Catalog/source.
+- Units.
+- Uncertainty.
+- Missing/inferred fields.
+
+24.5 Live editing
+Edits should pass through validation and the simulation command queue. Provide a preview/apply distinction if an edit could destabilize the simulation. If mass changes during a running simulation, apply it at a well-defined simulation-step boundary and record the event.
+
+===============================================================================
+25. ADD-ON ARCHITECTURE FOR ORBITAL
+===============================================================================
+
+25.1 Add-on types
+- Catalog add-on: stars/planets/DSOs and metadata.
+- Planet style pack: procedural presets/materials.
+- Texture pack.
+- Model pack.
+- Scenario/tutorial pack.
+- Shader/effect pack with restricted supported parameters.
+- Localization pack.
+
+25.2 Loading states
+- Discovered.
+- Manifest parsed.
+- Validated.
+- Dependencies resolved.
+- Enabled.
+- Disabled.
+- Failed with diagnostics.
+
+25.3 Dependency handling
+Use semantic version constraints or a simple explicit minimum-version contract. Detect cycles. Do not enable a package whose required dependencies are absent. Allow an explicit “disable conflicting package” recovery option.
+
+25.4 Override contract
+For an override, record:
+- Object/asset being overridden.
+- Original source.
+- Replacement source.
+- Field-level versus whole-record override.
+- Conflict priority.
+- Whether the override survives an upstream content update.
+
+25.5 No silent source mutation
+Built-in content should be read-only at runtime. Editor changes should go to:
+- A session override.
+- The current scenario file.
+- The user library.
+- A new add-on.
+
+This avoids breaking defaults and makes the user's creations portable.
+
+25.6 Add-on validation CLI (future)
+Possible command:
+orbital-tool validate-addon ./addons/MyAddon
+
+Validation output should report manifest errors, invalid catalog IDs, missing assets, shader compile errors if test context available, incompatible versions, asset/license metadata gaps, and likely performance problems.
+
+===============================================================================
+26. SCENARIO SCRIPTING DESIGN FOR ORBITAL
+===============================================================================
+
+26.1 Syntax choice
+A declarative JSON format is easiest for initial scenario data; a compact DSL is more readable for guided tutorials. A practical plan is:
+- Use JSON for persistent scenario definitions.
+- Use a tiny high-level script command format for interaction/timing.
+- Parse/validate into a typed command representation.
+- Execute on the main simulation loop through an explicit scheduler.
+
+26.2 Safe command architecture
+Commands must be registered in a whitelist. Each command declares:
+- Name.
+- Typed arguments.
+- Required permissions/capabilities.
+- Validation function.
+- Execution function.
+- Whether it yields/waits.
+- Whether it is reversible.
+- Expected event/output.
+
+26.3 Script time model
+Define whether a wait measures wall-clock time or simulation time. Offer both when meaningful:
+- wait.real_seconds(2.0)
+- wait.sim_seconds(86400.0)
+- wait.event("CollisionOccurred", filter)
+
+If simulation is paused, simulation-time waits should not accidentally complete unless the spec says they use wall-clock time.
+
+26.4 Undo and replay
+Simple property and camera commands can often be reversible. Spawning/deleting bodies or stepping physics requires state capture or inverse operations that are not always trivial. Scripts should mark whether a step can be undone and should use checkpoints when replay fidelity matters.
+
+26.5 Error reporting
+Example:
+Scenario "MassLab" failed at step 08:
+  command: body.set
+  object: planet-002
+  property: massKg
+  problem: value must be finite and greater than zero
+  recovery: step skipped; previous state unchanged
+
+Do not let one invalid property corrupt the universe state.
+
+===============================================================================
+27. UI/UX INFORMATION ARCHITECTURE
+===============================================================================
+
+27.1 Primary screen layout
+- Central 3D viewport.
+- Top toolbar with simulation controls, scenario selector, and creation action.
+- Left object explorer.
+- Right property inspector.
+- Bottom optional timeline/graphs/event log.
+- Floating contextual panels for mass laboratory and tutorials.
+
+Panels should be dockable/collapsible. The user must be able to hide inspector and explorer to recover a cinematic view.
+
+27.2 Visual style
+Use a dark scientific workspace with restrained cyan/blue accents and contrasting state colors. Avoid copying SpaceEngine's exact menu layout or icons. Develop an original ORBITAL design language with coherent spacing, readable typography, and clear selection/focus feedback.
+
+27.3 Interaction priorities
+Primary controls:
+- Play/pause.
+- Step.
+- Time scale.
+- Create body.
+- Select/focus.
+- Save/load.
+
+Secondary:
+- Orbit visibility.
+- Lighting/exposure.
+- Camera mode.
+- Quality preset.
+- Diagnostics.
+
+Advanced:
+- Integrator selection.
+- Gravity softening.
+- Relativity model.
+- Collision policy.
+- Terrain LOD details.
+
+Keep advanced engineering controls out of the main toolbar unless they are actively used. Put them in a Physics/Renderer Settings panel.
+
+27.4 Avoid fake UI
+Every button must have a working handler or be disabled with a tooltip explaining why. A label such as “Relativity: Enabled” is false if only a decorative lensing shader has been turned on. Use separate indicators for solver model and visual lensing.
+
+27.5 Units and editing
+All numeric fields display units. If the user types kilometers into a meter field, either provide a unit-aware input parser or clearly specify the expected unit. Never silently mix km and m. Provide presets for Earth, Jupiter, Sun, and Schwarzschild examples but keep them independent from any copied proprietary asset data.
+
+27.6 Accessibility and usability
+- Keyboard navigation.
+- Readable minimum font size.
+- High-contrast selection state.
+- Tooltips with one-sentence descriptions.
+- Adjustable UI scale.
+- Option to disable intense flashes, camera shake, and rapid visual effects.
+- Search-first discovery.
+- Clear validation errors at the point of input.
+
+===============================================================================
+28. TELEMETRY AND SCIENTIFIC VISUALIZATION
+===============================================================================
+
+28.1 Live plots
+- Surface gravity versus mass (radius fixed).
+- Surface gravity versus radius (mass fixed).
+- Escape velocity versus mass/radius.
+- Total energy versus simulation time.
+- Relative energy drift.
+- Orbital distance and speed.
+- Collision events.
+- Time-step size / substep count.
+- Performance costs by subsystem.
+
+28.2 Plot requirements
+- Axis labels include units.
+- No fake data.
+- Show current selected body/system.
+- Mark collision/parameter-change events.
+- Distinguish predicted series from measured simulation history.
+- Handle missing values.
+- Avoid automatically changing axis scale so aggressively that users misread the trend.
+- Export CSV for experiment analysis.
+
+28.3 Force vectors and gravitational field
+Offer overlays for:
+- Net gravitational acceleration vector.
+- Individual force contributions for selected body.
+- Probe acceleration at sampled grid points.
+- Potential field heat map for 2D slices.
+- Orbit track and velocity vector.
+
+For many-body systems, field visualization may be sampled at lower spatial resolution than the physics solver. Indicate that it is a visualization sampling, not a second exact solver.
+
+28.4 Experiment report
+When users run a scenario, create a report with:
+- Scenario name/version.
+- Integrator and timestep.
+- Body initial conditions.
+- Physical model.
+- Parameter changes.
+- Metrics and plots.
+- Collision events.
+- Error/warning summary.
+- Known approximation list.
+- Reproduction seed.
+
+===============================================================================
+29. DATA PROVENANCE, CATALOGS, AND UNCERTAINTY
+===============================================================================
+
+29.1 Source metadata
+Every real-world catalog import should preserve:
+- Dataset and publisher.
+- Data release/version.
+- Original object identifier.
+- Retrieval date.
+- Citation/reference.
+- License.
+- Coordinate reference frame and epoch.
+- Unit conversions performed.
+- Original and normalized value fields.
+- Uncertainty/covariance where available.
+
+29.2 Missing data
+- Null means unknown/unavailable.
+- Zero means measured/calculated zero only where physically meaningful.
+- Estimated values include a method/source.
+- Generated values include generator and seed.
+- Contradictory values show a warning.
+
+29.3 Coordinate systems
+For astronomical imports, record frame, epoch, units, and any transformations. A raw RA/Dec pair without reference/epoch metadata is not enough for precision display or dynamics.
+
+29.4 Catalog scope
+Start with a small curated scenario and a documented data pipeline. Avoid promising “the entire universe” based on a few static stars. Large catalog visualization requires indexing, LOD and careful use of measured uncertainties. A galaxy catalog point is a map record, not necessarily a simulated mass distribution.
+
+===============================================================================
+30. PERFORMANCE PLAN FOR TYPICAL DESKTOP HARDWARE
+===============================================================================
+
+30.1 General rule
+Profile before optimizing. Record both CPU time and GPU time. FPS alone cannot reveal whether a simulation is slow because of gravity, terrain generation, shader complexity, or UI.
+
+30.2 Physics scaling
+- Direct N-body is O(N^2); good for a small system and reference correctness.
+- Barnes–Hut can reduce average cost for larger distributions but introduces approximation error and more complex validation.
+- Do not implement Barnes–Hut before the direct solver tests pass.
+- Spatial broadphase is useful for collisions even if gravity remains direct.
+
+30.3 Render scaling
+- Use instancing for repeated star sprites and identical meshes.
+- Cache planet meshes and materials.
+- Batch orbit line geometry where practical.
+- Limit shadow/light count.
+- Use lower internal resolution for expensive effects.
+- Stream terrain/texture tiles within a budget.
+- Ensure background nebula effects do not consume unbounded memory.
+
+30.4 GPU/CPU ownership
+No GL calls from worker threads unless a valid context strategy is explicitly built. Worker threads may prepare data/decoded images/terrain arrays, while upload occurs on an allowed GL context thread. Coordinate cancellation on exit/reload.
+
+30.5 Performance telemetry
+Display:
+- Main-loop frame time.
+- Physics update duration.
+- Gravity pair count or tree node visits.
+- Integration substeps.
+- Collision candidates and actual contacts.
+- Terrain tiles generated/uploaded.
+- Draw calls and triangles where measured.
+- Approximate texture and render-target memory.
+
+30.6 Graceful degradation
+If high-quality atmosphere/lensing is too slow, reduce sampling or disable it. Do not silently turn off the underlying physical simulation to preserve FPS. If physics is the bottleneck, tell the user and offer a lower body count or solver approximation explicitly.
+
+===============================================================================
+31. SECURITY AND ROBUSTNESS
+===============================================================================
+
+- Parse files with size/depth limits.
+- Reject NaN and infinity in all physics-critical inputs.
+- Validate masses, radii, density and timesteps.
+- Protect against path traversal in add-on archives.
+- Do not execute arbitrary code from scenario/add-on files.
+- Handle malformed UTF-8/names without crashing.
+- Avoid integer overflow in image dimensions and buffer-size calculations.
+- Free resources on shader/texture loading failure.
+- Handle GPU context loss/window resize gracefully where possible.
+- Avoid raw pointers across object lifetime boundaries.
+- Use stable IDs and event notifications for deletion/merge.
+- Keep save operations atomic: write temporary file, validate/flush, then replace target.
+- Version every persistent data schema.
+- Make backups before schema migration.
+- Keep user logs informative but avoid unnecessary personal data.
+
+===============================================================================
+32. TESTING STRATEGY
+===============================================================================
+
+32.1 Physics unit tests
+- Acceleration magnitude equals GM/r^2 for a simple two-body setup.
+- Doubling source mass doubles acceleration at fixed position.
+- Doubling distance quarters acceleration magnitude.
+- Escape velocity formula agrees within tolerance.
+- Schwarzschild radius doubles when black-hole mass doubles.
+- Orbital-element conversion round trips within tolerance for selected test cases.
+- An ideal two-body orbit remains bound over a chosen test duration and step size.
+- Energy drift remains under a defined threshold for the chosen integrator/test setup.
+- Pairwise potential energy is counted exactly once.
+- Merging conserves mass and linear momentum.
+- Center of mass matches the analytical formula.
+- Invalid input is rejected without NaN propagation.
+- Collision handling does not leave duplicate/stale object IDs.
+
+32.2 Data tests
+- Save/load round trip preserves body state.
+- Missing asset produces a diagnostic and fallback.
+- Invalid parent ID is rejected.
+- Parent cycles are rejected.
+- Add-on conflicts resolve deterministically.
+- Script schema mismatch generates a useful error.
+- Package path traversal is rejected.
+
+32.3 Renderer tests
+- All essential shaders compile on the baseline OpenGL context.
+- Shader compile failure is reported.
+- Window resize updates framebuffers.
+- No GL resources are destroyed after context shutdown.
+- Low preset disables or reduces targeted effects.
+- Black-hole rendering can be disabled without affecting physics.
+- Camera-relative render positions remain stable after large moves/rebases.
+
+32.4 Integration tests
+- Launch default solar-system scenario.
+- Pause, step, resume.
+- Change one planet's mass and read resulting acceleration.
+- Create a planet and save/reload.
+- Force two bodies to collide with a known initial condition.
+- Create black hole, check radius, and inspect lensing mode.
+- Run scripted tutorial from start to end.
+- Intentionally break a shader/asset/script and confirm an actionable error.
+
+32.5 Build tests
+- Debug x64 build.
+- Release x64 build.
+- Clean rebuild from a fresh checkout if feasible.
+- Launch actual executable.
+- Confirm required runtime DLLs/assets are present.
+- Confirm relative paths work when launched from a different working directory.
+
+===============================================================================
+33. MILESTONE ROADMAP
+===============================================================================
+
+MILESTONE 0 — Repository reconnaissance
+Deliverables:
+- Existing file-tree summary.
+- Visual Studio version/toolset.
+- OpenGL context version.
+- GLAD configuration.
+- Dependency and asset inventory.
+- Exact current build status.
+- A small list of risks before editing.
+Acceptance:
+- No destructive rewrite.
+- No guessed dependencies.
+
+MILESTONE 1 — Window/render baseline
+Deliverables:
+- GLFW window.
+- GLAD initialization.
+- Logger.
+- Shader loader with compile/link logs.
+- A colored triangle and a simple 3D camera.
+Acceptance:
+- Builds and launches in Debug and Release where possible.
+- No silent shader errors.
+
+MILESTONE 2 — Body model and solar system
+Deliverables:
+- Body definitions and stable IDs.
+- Star and planet meshes.
+- System scenario.
+- Object selection.
+- Camera focus/follow.
+Acceptance:
+- A planet can be selected, focused, and inspected.
+
+MILESTONE 3 — Newtonian physics
+Deliverables:
+- Direct gravity solver.
+- Fixed-step clock.
+- Semi-implicit Euler and velocity Verlet.
+- Orbit trail from actual history.
+- Energy and momentum diagnostics.
+Acceptance:
+- Unit tests pass.
+- A two-body orbit is plausible and stable for specified parameters.
+
+MILESTONE 4 — Body editor
+Deliverables:
+- Create body wizard.
+- Mass/radius/velocity editors.
+- Parent and orbital fields.
+- Apply/undo/save.
+- Gravity laboratory graph.
+Acceptance:
+- Changing mass changes calculated acceleration predictably.
+
+MILESTONE 5 — Collisions
+Deliverables:
+- Sphere broad/narrow phase.
+- Bounce and merge policies.
+- Collision events/log.
+- Momentum and mass assertions.
+Acceptance:
+- Deterministic collision test passes.
+
+MILESTONE 6 — Scenario and persistence
+Deliverables:
+- Versioned save/load.
+- Default and experiment scenarios.
+- Safe scenario command runner.
+- Event wait/timeouts.
+Acceptance:
+- A recorded experiment can be reproduced from saved settings and seed.
+
+MILESTONE 7 — Visual body quality
+Deliverables:
+- Procedural materials.
+- Star emission.
+- Atmosphere rim/scattering approximation.
+- Clouds and rings.
+- Quality presets.
+Acceptance:
+- Effects can be individually disabled, and performance is measured.
+
+MILESTONE 8 — Textures and terrain LOD
+Deliverables:
+- Texture import/conversion path.
+- Cube-sphere LOD or selected alternative.
+- Biomes and soil materials.
+- Tile memory/loading budget.
+Acceptance:
+- No obvious cube seams in tested views.
+- Material changes update only affected assets.
+
+MILESTONE 9 — Object catalog and deep space
+Deliverables:
+- Searchable catalog.
+- Stars, galaxies, clusters, nebulae as catalog/render types.
+- Provenance and uncertainty support.
+Acceptance:
+- Catalog objects can be found and focused without forcing dynamic N-body simulation.
+
+MILESTONE 10 — Ship models and flight mode
+Deliverables:
+- Model import.
+- Materials and transform hierarchy.
+- Free camera/vehicle camera.
+- Optional basic thrust model.
+Acceptance:
+- Imported models have correct scale/orientation and no asset leaks.
+
+MILESTONE 11 — Black-hole and relativity lab
+Deliverables:
+- Schwarzschild calculations.
+- Capture policy.
+- Lensing shader approximation.
+- Test-particle mode with documented solver.
+Acceptance:
+- Physical panel and visual panel clearly indicate distinct models.
+
+MILESTONE 12 — Hardening and polish
+Deliverables:
+- Error recovery.
+- Diagnostics report.
+- Better UX and keyboard rebinds.
+- Test suite.
+- Documentation and limitations.
+Acceptance:
+- Clean Debug/Release builds and no known critical data corruption.
+
+===============================================================================
+34. DEFINITION OF DONE
+===============================================================================
+
+ORBITAL is not done because it renders a pretty planet. The initial solid release requires:
+
+- It builds in the existing Visual Studio project.
+- It launches without an immediate crash.
+- It renders and navigates a 3D star/planet system.
+- It contains actual Newtonian gravity calculations.
+- Users can create/edit bodies.
+- Mass changes produce the expected numeric and visual changes.
+- Orbit/energy diagnostics are based on actual simulation data.
+- Collisions use a documented response model.
+- Save/load works.
+- Black-hole mode derives Schwarzschild radius from mass and labels visual lensing correctly.
+- Quality settings operate and have measurable impact.
+- Script and add-on failures produce useful diagnostics.
+- No fake controls or fake telemetry remain.
+- Core tests pass.
+- Known approximations and missing features are documented.
+
+===============================================================================
+35. IMPLEMENTATION TICKETS AND ACCEPTANCE CRITERIA
+===============================================================================
+
+TICKET ORB-001 — Inspect existing project
+Tasks:
+- Enumerate files and projects.
+- Read .sln, .vcxproj, and filters.
+- Record include/lib/runtime dependencies.
+- Inspect initialization and shutdown paths.
+- Build before modifying if a toolchain is available.
+Acceptance:
+- The agent reports actual facts from files, not a guessed structure.
+
+TICKET ORB-002 — Central logger
+Tasks:
+- Severity levels.
+- Console/debug output.
+- File output.
+- Subsystem category.
+- Shader/asset/parser error details.
+Acceptance:
+- An intentionally missing asset creates a useful log line and does not crash the whole app.
+
+TICKET ORB-003 — Renderer baseline
+Tasks:
+- Context verification.
+- Shader manager.
+- Triangle and 3D camera.
+- Resize handling.
+Acceptance:
+- All essential shaders compile and draw.
+
+TICKET ORB-004 — Body registry
+Tasks:
+- Stable IDs.
+- Registry create/get/delete.
+- Selection notifications.
+- Parent relationships.
+Acceptance:
+- Deletion does not leave dangling selection pointers.
+
+TICKET ORB-005 — Gravity solver
+Tasks:
+- Direct pair-force evaluation.
+- Zero-distance policy.
+- Softening option where justified.
+- Unit tests.
+Acceptance:
+- Analytic point-mass tests pass.
+
+TICKET ORB-006 — Integrators
+Tasks:
+- Fixed step.
+- Semi-implicit Euler.
+- Velocity Verlet.
+- Bound per-frame substeps.
+Acceptance:
+- Integration is independent of render FPS.
+
+TICKET ORB-007 — Orbit metrics
+Tasks:
+- Keplerian element computation for supported states.
+- Validity/degeneracy flags.
+- Unit tests.
+Acceptance:
+- Unbound/invalid cases are not mislabeled as ordinary closed orbits.
+
+TICKET ORB-008 — Clock and time-scale controls
+Tasks:
+- Play/pause.
+- Step.
+- Time scaling.
+- Maximum step budget.
+Acceptance:
+- A high time scale cannot produce an uncontrolled integration jump.
+
+TICKET ORB-009 — Collision detection
+Tasks:
+- Sphere overlap.
+- Broadphase candidate filtering.
+- Collision events.
+Acceptance:
+- No NaN or duplicate-body states after collision.
+
+TICKET ORB-010 — Merge and bounce
+Tasks:
+- Impulse response.
+- Merge rules.
+- Conservation diagnostics.
+Acceptance:
+- Unit tests verify mass and momentum to tolerance.
+
+TICKET ORB-011 — Scenario serialization
+Tasks:
+- Versioned schema.
+- Atomic save.
+- Load validation.
+- Error report.
+Acceptance:
+- Round-trip tests pass.
+
+TICKET ORB-012 — Object Explorer and Inspector
+Tasks:
+- Search/list.
+- Select/focus.
+- Physical metrics.
+- Appearance tabs.
+Acceptance:
+- Every visible action performs its stated operation.
+
+TICKET ORB-013 — Body creation wizard
+Tasks:
+- Choose type/template.
+- Fields with units.
+- Validation.
+- Preview.
+Acceptance:
+- A created body participates in the correct rendering/physics modes.
+
+TICKET ORB-014 — Gravity laboratory
+Tasks:
+- Probe position.
+- Mass multiplier.
+- Show acceleration and escape speed.
+- Live graph.
+Acceptance:
+- Doubling mass at fixed radius/distance doubles selected Newtonian acceleration.
+
+TICKET ORB-015 — Procedural star and planet materials
+Tasks:
+- Star color/emission.
+- Seeded planet noise.
+- Material uniforms.
+Acceptance:
+- Same seed/settings are reproducible within defined limits.
+
+TICKET ORB-016 — Atmospheres and rings
+Tasks:
+- Atmosphere shader.
+- Ring geometry/material.
+- Layer toggles.
+Acceptance:
+- Rendering settings do not change physics state.
+
+TICKET ORB-017 — Texture pipeline
+Tasks:
+- Projection choice.
+- Mipmaps.
+- Tile cache.
+- Missing/corrupt file handling.
+Acceptance:
+- Texture conversion is repeatable and seam checks are documented.
+
+TICKET ORB-018 — Add-on resolver
+Tasks:
+- Manifest parser.
+- Load priority.
+- Conflict report.
+- Safe disable.
+Acceptance:
+- Conflicts resolve deterministically.
+
+TICKET ORB-019 — Script interpreter
+Tasks:
+- Parse/validate commands.
+- Typed command registry.
+- Waits/events/timeouts.
+Acceptance:
+- Invalid script reports filename/line and leaves model consistent.
+
+TICKET ORB-020 — DSO renderer/catalog
+Tasks:
+- Catalog import.
+- Search/focus.
+- Point/sprite/impostor LOD.
+Acceptance:
+- DSO objects remain catalog/render entities unless physical simulation is intentionally enabled.
+
+TICKET ORB-021 — Ship import pipeline
+Tasks:
+- Model loader.
+- Materials.
+- Transform hierarchy.
+- Camera alignment preview.
+Acceptance:
+- Repeated meshes share GPU resources.
+
+TICKET ORB-022 — Schwarzschild calculations
+Tasks:
+- Radius calculation.
+- Correct units.
+- UI readout.
+- Unit tests.
+Acceptance:
+- Doubling mass doubles Schwarzschild radius.
+
+TICKET ORB-023 — Black-hole renderer
+Tasks:
+- Shadow/horizon visual.
+- Disk.
+- Lensing approximation.
+- Quality control.
+Acceptance:
+- Lensing can be disabled without disabling black-hole mass or Newtonian gravity.
+
+TICKET ORB-024 — Relativistic test particle
+Tasks:
+- Define metric and coordinates.
+- Derive equations of motion.
+- Numerical integration and tolerances.
+- Validate special radii/trajectories.
+Acceptance:
+- Documentation accurately states domain and limitations.
+
+TICKET ORB-025 — QA and release
+Tasks:
+- Full builds/tests.
+- Crash/error paths.
+- Performance profile.
+- README and physics documentation.
+Acceptance:
+- No claim of successful test without a recorded run.
+
+===============================================================================
+36. EXAMPLE ORBITAL DATA SCHEMAS
+===============================================================================
+
+The following examples are proposed ORBITAL schemas, not SpaceEngine format and not directly compatible with SpaceEngine files.
+
+36.1 Example add-on manifest
+
+{
+  "schemaVersion": 1,
+  "id": "org.example.orbital.icy-worlds",
+  "displayName": "Icy Worlds Pack",
+  "version": "1.0.0",
+  "minimumEngineVersion": "0.1.0",
+  "description": "Original procedural icy-world presets.",
+  "license": "CC-BY-4.0",
+  "dependencies": [],
+  "capabilities": ["catalog.read", "assets.add", "scenario.add"],
+  "contentRoots": ["catalogs", "assets", "scenarios"]
+}
+
+This is illustrative. Before release, choose and verify a license that actually fits the content and include any required attribution.
+
+36.2 Example body definition
+
+{
+  "schemaVersion": 1,
+  "id": "orbital.body.planet.earthlike-001",
+  "name": "Aurelia",
+  "type": "planet",
+  "parentId": "orbital.star.primary-001",
+  "physics": {
+    "massKg": 5.8e24,
+    "meanRadiusM": 6.5e6,
+    "rotationPeriodSeconds": 86400.0,
+    "axialTiltRadians": 0.41,
+    "mode": "dynamic"
+  },
+  "initialState": {
+    "frame": "parent-relative-inertial",
+    "positionM": [1.5e11, 0.0, 0.0],
+    "velocityMS": [0.0, 2.1e4, 0.0]
+  },
+  "appearance": {
+    "presetId": "orbital.preset.temperate-rocky",
+    "seed": 90210,
+    "atmosphereEnabled": true,
+    "cloudsEnabled": true,
+    "ringsEnabled": false
+  },
+  "provenance": {
+    "kind": "user-created",
+    "notes": "Fictional world for a simulation scenario."
+  }
+}
+
+36.3 Example scenario definition
+
+{
+  "schemaVersion": 1,
+  "id": "orbital.scenario.mass-lab",
+  "name": "Mass and Gravity Laboratory",
+  "initialPause": true,
+  "timeStepSeconds": 10,
+  "integrator": "velocity-verlet",
+  "bodies": [
+    {
+      "id": "star-1",
+      "type": "star",
+      "massKg": 1.989e30,
+      "radiusM": 6.9634e8,
+      "positionM": [0, 0, 0],
+      "velocityMS": [0, 0, 0],
+      "mode": "pinned-source"
+    },
+    {
+      "id": "probe-1",
+      "type": "test-particle",
+      "massKg": 1,
+      "positionM": [1.5e11, 0, 0],
+      "velocityMS": [0, 0, 0],
+      "mode": "test-particle"
+    }
+  ]
+}
+
+36.4 Schema requirements
+- Include version fields.
+- Distinguish body definition from current runtime state.
+- Include units consistently.
+- Use stable IDs.
+- Validate before changing current state.
+- Preserve unknown extension fields only if compatibility rules define that behavior.
+- Do not use a body name as the only key.
+
+===============================================================================
+37. EXAMPLE SCENARIO SCRIPTING SYNTAX
+===============================================================================
+
+A future ORBITAL DSL might look like this. It is an example, not implemented functionality unless the coding agent actually builds the parser and executor.
+
+scenario "Mass Lab" {
+  load "mass-lab.json"
+  pause
+  camera.focus "star-1" over 2.0 real_seconds
+  message.show "Experiment" "Move the probe to a fixed distance, then double the star mass."
+  wait.event "UserPressedContinue" timeout 120.0 real_seconds
+  body.set "star-1" massKg 3.978e30
+  wait.sim_seconds 3600
+  plot.start "probe.acceleration"
+  message.show "Expected trend" "At fixed distance, Newtonian acceleration scales linearly with source mass."
+  wait.event "UserPressedContinue" timeout 120.0 real_seconds
+  report.note "Mass doubled while probe distance was held fixed."
+  pause
+}
+
+Parser/runner requirements:
+- A command must either complete or explicitly yield.
+- Wait states must be visible in diagnostics.
+- Timeouts need defined failure behavior.
+- Invalid objects/fields must not leave partially mutated state.
+- The script should be restartable from a checkpoint if the scenario supports it.
+- Input values should be type/unit checked.
+
+===============================================================================
+38. PHYSICS FORMULAS AND VALIDATION CASES
+===============================================================================
+
+38.1 Newtonian acceleration
+Given source mass M and distance r:
+a = G*M/r^2.
+
+Test:
+- M = 5.972e24 kg.
+- r = 6.371e6 m.
+- Expected surface gravity roughly 9.8 m/s^2 using this approximate mass/radius.
+
+The test values are approximate reference values, not a replacement for a sourced planetary data record.
+
+38.2 Escape speed
+v_escape = sqrt(2*G*M/R).
+
+For an Earth-like body, the result should be near 11.2 km/s at the surface under an ideal spherical, no-atmosphere, non-rotating approximation.
+
+38.3 Schwarzschild radius
+r_s = 2*G*M/c^2.
+
+Reference behavior:
+- Radius must be positive for positive mass.
+- Radius is proportional to mass.
+- Doubling mass doubles radius.
+- Changing visual exposure must not change the calculated radius.
+
+38.4 Orbital period
+T = 2*pi*sqrt(a^3/(G*(M+m))).
+
+Use positive a and a bound orbit for a conventional period. Validate units and use radians in internal trigonometric calculations.
+
+38.5 Conservation for merge
+m = m1 + m2.
+v = (m1*v1+m2*v2)/(m1+m2).
+
+If there are no external impulses, merged mass and linear momentum should be preserved within floating-point tolerance. Kinetic energy generally is not conserved in a fully inelastic merger; the lost kinetic energy should be recorded as an approximation/energy sink, not silently described as a conservative collision.
+
+38.6 Potential energy pair counting
+U = -sum over i<j of G*m_i*m_j/r_ij.
+
+Do not sum ordered pairs i,j and forget to halve the result. Prefer an explicit unordered-pair loop or a tested pair cache.
+
+38.7 Units test
+If position is stored in kilometres but interpreted as metres, force/acceleration errors become enormous. Add unit-bearing property names in JSON and type wrappers where practical. Internal APIs should favor SI names such as massKg, positionM, velocityMS, accelerationMS2.
+
+===============================================================================
+39. RISKS, ANTI-PATTERNS, AND MITIGATION
+===============================================================================
+
+RISK 1 — Building an entire “SpaceEngine clone” at once
+Why it fails: the feature set is much larger than a first prototype; incomplete interactions and broken integration accumulate.
+Mitigation: deliver small vertical slices that compile and run. Make each milestone acceptance-testable.
+
+RISK 2 — Rendering looks right but physics is wrong
+Why it fails: hand-tuned trajectories and fake measurements can mask integration defects.
+Mitigation: compute actual state, add analytical unit tests, show numerical diagnostics, and prevent the renderer from inventing physics values.
+
+RISK 3 — Claiming full general relativity
+Why it fails: a Newtonian solver plus lensing shader is not a full solution to Einstein's equations.
+Mitigation: separate solver and renderer and label the physical model accurately.
+
+RISK 4 — Mixing visual scale and physical scale
+Why it fails: solar-system distances and radii span too many orders of magnitude for a single straightforward view.
+Mitigation: separate physics coordinates, camera-relative rendering and display scale.
+
+RISK 5 — One massive C++ file
+Why it fails: difficult ownership, poor testability, hard-to-fix regressions, and painful shader/UI integration.
+Mitigation: modules, interfaces, clear ownership, unit tests, and small compile-safe changes.
+
+RISK 6 — Unbounded time acceleration
+Why it fails: a huge timestep destabilizes orbits and tunnels through collisions.
+Mitigation: fixed timestep, bounded substeps, adaptive timestep policy, and slow/fast modes with user-visible limits.
+
+RISK 7 — Invalid add-on crashes the app
+Why it fails: user content is uncontrolled and frequently incomplete.
+Mitigation: validation, staging, safe fallback, diagnostic logs, and no native code execution.
+
+RISK 8 — Reusing SpaceEngine content improperly
+Why it fails: proprietary code/assets and third-party media have distinct rights.
+Mitigation: create original assets, audit all third-party licenses, and keep asset metadata.
+
+RISK 9 — Too much detail too early
+Why it fails: expensive terrain, atmosphere and volumetric effects distract from broken interactions and drain the GPU budget.
+Mitigation: render baseline first, profile, then increase detail through quality tiers.
+
+RISK 10 — “Procedural” presented as “scientifically observed”
+Why it fails: the user cannot tell fabricated surfaces/values from catalog measurements.
+Mitigation: provenance badges and separate physical-data versus visual-generation panels.
+
+RISK 11 — SpaceEngine manual details copied as current behavior without version review
+Why it fails: some pages describe legacy versions and admit limitations.
+Mitigation: recheck current source before adopting exact numeric constraints, keys, fields, or package-priority rules.
+
+RISK 12 — OpenGL version mismatch
+Why it fails: newer shader features may not exist in the configured context or user GPU.
+Mitigation: query capabilities, keep a baseline shader path, and gate optional features.
+
+RISK 13 — Low precision far from origin
+Why it fails: float precision cannot maintain small offsets at very large coordinates.
+Mitigation: double-precision simulation and floating-origin rendering.
+
+RISK 14 — Raw pointers for objects edited/deleted/merged at runtime
+Why it fails: pointers become invalid after container changes or object deletion.
+Mitigation: stable IDs, registry lookup, events on lifecycle changes.
+
+RISK 15 — UI edits simulation directly from rendering code
+Why it fails: undefined update order and data races if the simulation becomes threaded.
+Mitigation: validated commands applied at a fixed simulation boundary.
+
+===============================================================================
+40. SUGGESTED IMPLEMENTATION ORDER
+===============================================================================
+
+The implementation order matters more than the number of features in a spec.
+
+First: inspect the current Visual Studio project and build it unchanged.
+Second: build the 3D viewport and logger.
+Third: create the body registry, fixed clock, direct gravity, and one verified two-body system.
+Fourth: add orbit trails, diagnostics, and numerical tests.
+Fifth: create an editing UI that genuinely alters mass/radius/velocity.
+Sixth: add collision detection and robust merge/bounce models.
+Seventh: implement scenario persistence and a constrained scenario scripting model.
+Eighth: add star/planet appearance, textures, atmosphere, rings, and quality presets.
+Ninth: implement add-on/catalog architecture and deep-space render objects.
+Tenth: implement ship asset import and optional vehicle dynamics.
+Eleventh: implement black-hole visualization and a separately tested relativistic solver mode.
+Twelfth: add procedural terrain LOD and advanced materials, guided tutorials, profiling, hardening, and documentation.
+
+Do not implement expensive high-detail terrain before asset caching, camera scale, and the base renderer are stable. Do not build an extensive script language before the application has commands/events that scripts can actually invoke. Do not add 100 catalog objects before the Explorer/search workflow exists.
+
+===============================================================================
+41. FINAL INTEGRATION CHECKLIST
+===============================================================================
+
+PROJECT
+[ ] Existing .sln and .vcxproj preserved.
+[ ] Dependencies and versions documented.
+[ ] Debug x64 builds.
+[ ] Release x64 builds.
+[ ] Executable works when launched from a normal working directory.
+[ ] Clean shutdown and resource destruction.
+
+SIMULATION
+[ ] SI units documented and used internally.
+[ ] Fixed timestep independent of rendering.
+[ ] Gravity solver unit tests pass.
+[ ] At least one orbital integrator test passes.
+[ ] Energy and momentum diagnostics are available.
+[ ] Collision response and conservation claims are documented.
+[ ] High time acceleration is bounded safely.
+
+INTERACTION
+[ ] Camera navigation and focus work.
+[ ] Object Explorer search works.
+[ ] Object Inspector displays actual values.
+[ ] Create/edit/delete operations work.
+[ ] Pause/step/resume works.
+[ ] Save/load works.
+[ ] No decorative nonfunctional controls.
+
+RENDERING
+[ ] Shader compile/link errors are reported.
+[ ] Quality presets change real renderer settings.
+[ ] Effects have safe fallback/disable paths.
+[ ] Camera-relative rendering is stable over large moves.
+[ ] Physical values are independent from screen/display scale.
+
+PLANETS AND CONTENT
+[ ] Procedural seeds are reproducible.
+[ ] Texture import validates images.
+[ ] Materials separate albedo/normal/roughness/height meanings.
+[ ] Biome presets are versioned.
+[ ] Add-on source priority is deterministic.
+[ ] Catalog entries preserve source/uncertainty.
+
+RELATIVITY
+[ ] Schwarzschild radius tested.
+[ ] Black-hole visual effect is clearly labeled an approximation where appropriate.
+[ ] A visual toggle does not change the physics solver.
+[ ] Relativistic equations, frame, coordinates and limitations are documented.
+
+SCRIPTS AND EXTENSIONS
+[ ] Script parser validates commands.
+[ ] Invalid scripts cannot corrupt state.
+[ ] Waits have timeout/cancel behavior.
+[ ] Add-ons cannot run arbitrary native code.
+[ ] Broken assets produce actionable errors.
+
+LEGAL/ASSET HYGIENE
+[ ] No unlicensed SpaceEngine assets/code copied.
+[ ] Third-party code licenses are recorded.
+[ ] Imported data licenses and source are tracked.
+[ ] Documentation includes actual limitations.
+
+===============================================================================
+42. SOURCE BIBLIOGRAPHY AND PAGES REVIEWED
+===============================================================================
+
+1. SpaceEngine FAQ
+https://spaceengine.org/manual/faq/
+Used for: catalog/procedural mix, user navigation, camera and speed controls, focus/landing workflow, toolbars, exposure/brightness, FPS display, texture resolution caveats, troubleshooting/logs, closed-source status, C++/GLSL note.
+
+2. SpaceEngine User Manual
+https://spaceengine.org/manual/user-manual/
+Used for: quality presets, VSync, MSAA/FXAA, terrain LOD/loading limits, self-emission, planet shine, eclipse shadows, dithering, black-hole/lensing quality, anisotropic filtering, texture compression, rings and volumetric-object quality.
+
+3. Making Addons — Introduction
+https://spaceengine.org/manual/making-addons/introduction/
+Used for: base data/add-on folder structure, mirrored directory trees, override priorities, virtual paths, PAK/ZIP packaging, catalogs and text data formats.
+
+4. Creating a star
+https://spaceengine.org/manual/making-addons/creating-a-star/
+Used for: star catalog data, script-like records versus CSV, mass/radius/temperature/luminosity, spectral class, multi-star system concepts and deriving properties.
+
+5. Creating a planet
+https://spaceengine.org/manual/making-addons/creating-a-planet/
+Used for: parent bodies, orbital elements, planetary mass/radius/rotation/obliquity, albedo, surface generation controls, cloud layers, atmosphere, rings, planet editor workflow and limitations.
+
+6. Planet textures
+https://spaceengine.org/manual/making-addons/planet-textures/
+Used for: cylindrical-to-cube-map conversion, multi-LOD tiles, configuration-driven tooling and combining tile files.
+
+7. Planet biome presets and soil materials
+https://spaceengine.org/manual/making-addons/planet-biome-presets/
+Used for: biome preset idea, mid-scale samples versus fine soil materials, palettes, texture-channel separation, material library and author workflow.
+
+8. Creating a deep-space object
+https://spaceengine.org/manual/making-addons/creating-a-dso/
+Used for: galaxy/cluster/nebula catalog organization, metadata, custom models, standard model selection, CSV catalogs and deep-space rendering patterns.
+
+9. Creating a ship
+https://spaceengine.org/manual/making-addons/creating-a-ship/
+Used for: modular spacecraft, mesh/material/texture references, asset directories, reusable parts, imported model pipeline and model editing/camera alignment.
+
+10. Scenario scripts
+https://spaceengine.org/manual/making-addons/scenario-scripts/
+Used for: script files, console execution, commands with parameter blocks, camera paths, waits/triggers, UI/effect controls, object visibility and configurable settings.
+
+11. Space Flight School
+https://spaceengine.org/manual/space-flight-school/
+Used for: guided piloting/commanding tutorial concept. The page explicitly calls itself unofficial and cautions that it may contain errors and could lag behind product changes.
+
+12. License & Credits
+https://spaceengine.org/manual/license/
+Used for: difference between standard and commercial-use terms, restrictions for certain supplied assets/music, and importance of reviewing individual asset rights.
+
+13. SpaceEngine HTML Sitemap
+https://spaceengine.org/sitemap.html
+Used to confirm the public navigation/manual pages linked from the site.
+
+END OF DOCUMENT
+
+FINAL MESSAGE TO THE IMPLEMENTING CODING AGENT
+----------------------------------------------
+Use this as an implementation reference and feature map, not as a demand to write the entire universe simulator in one code-generation pass. Inspect the actual Visual Studio repository, preserve the current project configuration, and start with the smallest complete physics-plus-rendering vertical slice. Keep every milestone compiling, test the mathematics separately from graphics, and report exactly what is implemented versus what remains approximate or unverified.

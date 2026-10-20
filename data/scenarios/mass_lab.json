@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "orbital.scenario.mass_lab",
+  "name": "Mass and Gravitational Acceleration Laboratory",
+  "initialPause": true,
+  "timeStepSeconds": 10.0,
+  "timeScale": 86400.0,
+  "integrator": "velocity-verlet",
+  "bodies": [
+    {
+      "id": "body.star",
+      "name": "Central Star (1 M_sun)",
+      "type": "Star",
+      "physics": {
+        "massKg": 1.98847e30,
+        "meanRadiusM": 6.957e8,
+        "rotationPeriodSeconds": 2160000.0,
+        "axialTiltDegrees": 7.25,
+        "mode": "pinned-source"
+      },
+      "initialState": {
+        "positionM": [0.0, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 0.0]
+      },
+      "appearance": {
+        "colorRGB": [1.0, 0.92, 0.65],
+        "roughness": 0.5,
+        "metallic": 0.0,
+        "emission": 1.0,
+        "atmosphereEnabled": false,
+        "atmosphereDensity": 0.0,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    },
+    {
+      "id": "body.probe1",
+      "name": "Orbital Test Probe (1.0 AU)",
+      "type": "Spacecraft / Probe",
+      "physics": {
+        "massKg": 1000.0,
+        "meanRadiusM": 1.0e6,
+        "rotationPeriodSeconds": 86400.0,
+        "axialTiltDegrees": 0.0,
+        "mode": "dynamic"
+      },
+      "initialState": {
+        "positionM": [1.495978707e11, 0.0, 0.0],
+        "velocityMS": [0.0, 0.0, 29780.0]
+      },
+      "appearance": {
+        "colorRGB": [0.2, 0.8, 1.0],
+        "roughness": 0.4,
+        "metallic": 0.8,
+        "emission": 0.0,
+        "atmosphereEnabled": false,
+        "atmosphereDensity": 0.0,
+        "ringsEnabled": false,
+        "ringInnerRadiusM": 0.0,
+        "ringOuterRadiusM": 0.0
+      }
+    }
+  ]
+}

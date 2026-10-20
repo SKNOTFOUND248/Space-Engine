@@ -1,0 +1,33 @@
+# Visual Studio files and folders
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build output and intermediates
+x64/
+x86/
+ARM64/
+Debug/
+Release/
+CPPsumulations1/
+build/
+bin/
+obj/
+*.ilk
+*.pdb
+*.exe
+*.obj
+*.iobj
+*.ipdb
+*.tlog
+*.lastbuildstate
+*.log
+
+# vcpkg local installations and binary caches
+vcpkg_installed/
+
+# Runtime generated telemetry and state
+imgui.ini
+*.csv
